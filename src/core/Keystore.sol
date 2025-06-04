@@ -40,8 +40,8 @@ contract Keystore is IKeystore {
     }
 
     function _getCurrentRootHash(bytes32 refHash) internal view returns (bytes32) {
-        bytes32 currentHash = rootHashes[refHash];
-        return currentHash == bytes32(0) ? refHash : currentHash;
+        bytes32 rootHash = rootHashes[refHash];
+        return rootHash == bytes32(0) ? refHash : rootHash;
     }
 
     function _unpackNode(bytes calldata node) internal pure returns (address verifier, bytes memory config) {
