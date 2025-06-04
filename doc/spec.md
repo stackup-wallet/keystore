@@ -242,7 +242,7 @@ The singleton property is also required in order to preserve the deterministic d
 
 ## Security Considerations
 
-Assuming the `Keystore` rollup is audited and verified to be safe, there are some downstream security considerations worth noting.
+Assuming the `Keystore` contract is audited and verified to be safe, there are some downstream security considerations worth noting.
 
 ### `Verifier` should only trust the `Keystore`
 
