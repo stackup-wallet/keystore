@@ -95,7 +95,7 @@ struct UpdateAction {
     bytes data;
 }
 
-struct ValidationAction {
+struct ValidateAction {
     bytes32 refHash;
     bytes32 message;
     bytes32[] proof;
@@ -112,7 +112,7 @@ interface Keystore {
     event RootHashUpdated(bytes32 indexed refHash, bytes32 oldRoot, bytes32 newRoot, bool success);
 
     function handleUpdates(UpdateAction[] calldata actions) external;
-    function validate(ValidationAction calldata action) external view returns (bool);
+    function validate(ValidateAction calldata action) external view returns (bool);
 }
 ```
 

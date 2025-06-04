@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {UpdateAction, ValidationAction} from "./actions.sol";
+import {UpdateAction, ValidateAction} from "./actions.sol";
 
 interface IKeystore {
     error InvalidNextHash();
@@ -12,5 +12,5 @@ interface IKeystore {
     event RootHashUpdated(bytes32 indexed refHash, bytes32 oldRoot, bytes32 newRoot, bool success);
 
     function handleUpdates(UpdateAction[] calldata actions) external;
-    function validate(ValidationAction calldata action) external view returns (bool);
+    function validate(ValidateAction calldata action) external view returns (bool);
 }

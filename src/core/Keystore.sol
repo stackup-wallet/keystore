@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {MerkleProofLib} from "solady/utils/MerkleProofLib.sol";
-import {UpdateAction, ValidationAction} from "../interface/actions.sol";
+import {UpdateAction, ValidateAction} from "../interface/actions.sol";
 import {IKeystore} from "../interface/IKeystore.sol";
 import {IVerifier} from "../interface/IVerifier.sol";
 
@@ -31,7 +31,7 @@ contract Keystore is IKeystore {
         }
     }
 
-    function validate(ValidationAction calldata action) external view returns (bool) {
+    function validate(ValidateAction calldata action) external view returns (bool) {
         bytes32 rootHash = _getCurrentRootHash(action.refHash);
         if (!MerkleProofLib.verify(action.proof, rootHash, keccak256(action.node))) revert InvalidProof();
 

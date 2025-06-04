@@ -9,7 +9,7 @@ struct UpdateAction {
     bytes data;
 }
 
-struct ValidationAction {
+struct ValidateAction {
     bytes32 refHash;
     bytes32 message;
     bytes32[] proof;
