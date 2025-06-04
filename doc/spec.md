@@ -68,10 +68,10 @@ graph TD
     HashD --> Config7[Node #7]
     HashD --> Config8[Node #8]
 
-    style Config3 fill:lightblue
-    style Config4 fill:lightblue
-    style HashA fill:lightblue
-    style HashCD fill:lightblue
+    style Config3 fill:darkblue
+    style Config4 fill:darkblue
+    style HashA fill:darkblue
+    style HashCD fill:darkblue
 ```
 
 ### `Keystore` singleton
