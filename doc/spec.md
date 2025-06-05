@@ -90,6 +90,7 @@ This singleton MUST have the following interface.
 struct UpdateAction {
     bytes32 refHash;
     bytes32 nextHash;
+    uint256 nonce;
     bytes32[] proof;
     bytes node;
     bytes data;
@@ -104,12 +105,15 @@ struct ValidateAction {
 }
 
 interface Keystore {
-    error InvalidNextHash();
+    error InvalidNonce();
     error InvalidProof();
+    error InvalidVerification();
     error InvalidNode();
     error InvalidVerifier();
 
-    event RootHashUpdated(bytes32 indexed refHash, bytes32 oldRoot, bytes32 newRoot, bool success);
+    event RootHashUpdated(
+        bytes32 indexed refHash, bytes32 nextHash, uint256 nonce, bytes32[] proof, bytes node, bytes data, bool success
+    );
 
     function handleUpdates(UpdateAction[] calldata actions) external;
     function validate(ValidateAction calldata action) external view returns (bool);
@@ -132,13 +136,14 @@ In the initial edge case where `currentHash` is equal to zero, then the `Keystor
 
 Updating a configuration set is equivalent to updating the current root hash in the `Keystore`. The essential data structure in this flow is the `UpdateAction` intent.
 
-| Field      | Type        | Description                                   |
-| ---------- | ----------- | --------------------------------------------- |
-| `refHash`  | `bytes32`   | Permanent reference hash for the UCMT.        |
-| `nextHash` | `bytes32`   | Next root hash after the update.              |
-| `proof`    | `bytes32[]` | Merkle proof for the node.                    |
-| `node`     | `bytes`     | Node data containing `verifier` and `config`. |
-| `data`     | `bytes`     | Arbitrary data for the verifier.              |
+| Field      | Type        | Description                                                                           |
+| ---------- | ----------- | ------------------------------------------------------------------------------------- |
+| `refHash`  | `bytes32`   | Permanent reference hash for the UCMT.                                                |
+| `nextHash` | `bytes32`   | Next root hash after the update.                                                      |
+| `nonce`    | `uint256`   | 2D nonce with packed `uint192` key and `uint64` sequence. Prevents replaying updates. |
+| `proof`    | `bytes32[]` | Merkle proof for the node.                                                            |
+| `node`     | `bytes`     | Node data containing `verifier` and `config`.                                         |
+| `data`     | `bytes`     | Arbitrary data for the verifier.                                                      |
 
 On a systems level, the root hash update has the following lifecycle.
 
@@ -158,6 +163,10 @@ sequenceDiagram
 This process begins with the `Caller` initiating the `handleUpdates` function on the `Keystore` contract. For every `UpdateAction` in the batch, the `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the update to the next root hash is valid and returns a corresponding boolean value.
 
 Note that `handleUpdates` accepts a batch of `updateAction` objects by design in order to support use cases where other entities, such as solvers, are relaying updates on behalf of many accounts.
+
+##### Replay protection
+
+In order to prevent replaying old updates the `Keystore` MUST use a nonce mechanism. We implement a 2D nonce in order to allow for easier expansion into new chains without having to "catch up" to the latest nonce of the canonical chain. For example, with a 1 dimensional nonce, if the root hash has been updated X times on chain A before broadcasting to chain B then chain B must effectively re-run X number of old updates to be at the latest nonce. This is solved with a 2D nonce since adding a new chain would just require an increment of the nonce key which would reset all chain sequences back to 0.
 
 #### Using the `Keystore` for validation
 
@@ -199,10 +208,10 @@ It is worth noting that there is no enforced data structure on the `data` and `c
 When updating the root hash, the `Keystore` MUST call the `validateData` function with the following `message` format.
 
 ```solidity
-bytes32 message = keccak256(abi.encode(refHash, nextRootHash, keccak256(node), keccak256(data)))
+bytes32 message = keccak256(abi.encode(refHash, nextRootHash, nonce, keccak256(node)))
 ```
 
-Note that `chainId` is not part of this message hash since it is expected that an `UpdateAction` can be replayed across all chains. It is the responsibility of the `Keystore` to prevent old `updateAction` objects to be replayed by only allowing an update to a new root hash once (i.e. using the `nextRootHash` as a nonce value).
+Note that `chainId` is not part of this message hash since it is expected that an `UpdateAction` can be replayed across all chains.
 
 ## Rationale
 

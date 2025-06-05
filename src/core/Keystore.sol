@@ -7,41 +7,64 @@ import {IKeystore} from "../interface/IKeystore.sol";
 import {IVerifier} from "../interface/IVerifier.sol";
 
 contract Keystore is IKeystore {
-    mapping(bytes32 => bytes32) public rootHashes;
-    mapping(bytes32 => bool) internal usedHashes;
+    mapping(bytes32 => bytes32) public rootHash;
+    mapping(bytes32 => mapping(uint192 => uint256)) public nonceSequence;
 
     function handleUpdates(UpdateAction[] calldata actions) external {
         for (uint256 i = 0; i < actions.length; i++) {
             UpdateAction calldata action = actions[i];
-            if (action.nextHash == action.refHash || usedHashes[action.nextHash]) revert InvalidNextHash();
+            (uint192 nonceKey, uint64 nonceSeq) = _unpackNonceKey(action.nonce);
+            require(_validateNonce(action.refHash, nonceKey, nonceSeq), InvalidNonce());
 
-            bytes32 rootHash = _getCurrentRootHash(action.refHash);
             bytes32 nodeHash = keccak256(action.node);
-            if (!MerkleProofLib.verify(action.proof, rootHash, nodeHash)) revert InvalidProof();
+            require(MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash), nodeHash), InvalidProof());
 
             (address verifier, bytes memory config) = _unpackNode(action.node);
-            bytes32 message = keccak256(abi.encode(action.refHash, action.nextHash, nodeHash, keccak256(action.data)));
+            bytes32 message = keccak256(abi.encode(action.refHash, action.nextHash, action.nonce, nodeHash));
             if (!IVerifier(verifier).validateData(message, action.data, config)) {
-                emit RootHashUpdated(action.refHash, rootHash, action.nextHash, false);
+                emit RootHashUpdated(
+                    action.refHash, action.nextHash, action.nonce, action.proof, action.node, action.data, false
+                );
             } else {
-                rootHashes[action.refHash] = action.nextHash;
-                usedHashes[action.nextHash] = true;
-                emit RootHashUpdated(action.refHash, rootHash, action.nextHash, true);
+                rootHash[action.refHash] = action.nextHash;
+                _updateNonce(action.refHash, nonceKey);
+                emit RootHashUpdated(
+                    action.refHash, action.nextHash, action.nonce, action.proof, action.node, action.data, true
+                );
             }
         }
     }
 
     function validate(ValidateAction calldata action) external view returns (bool) {
-        bytes32 rootHash = _getCurrentRootHash(action.refHash);
-        if (!MerkleProofLib.verify(action.proof, rootHash, keccak256(action.node))) revert InvalidProof();
+        require(
+            MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash), keccak256(action.node)),
+            InvalidProof()
+        );
 
         (address verifier, bytes memory config) = _unpackNode(action.node);
         return IVerifier(verifier).validateData(action.message, action.data, config);
     }
 
+    function getNonce(bytes32 refHash, uint192 key) public view returns (uint256 nonce) {
+        return nonceSequence[refHash][key] | (uint256(key) << 64);
+    }
+
+    function _unpackNonceKey(uint256 nonce) internal pure returns (uint192 nonceKey, uint64 nonceSeq) {
+        nonceKey = uint192(nonce >> 64);
+        nonceSeq = uint64(nonce);
+    }
+
+    function _validateNonce(bytes32 refHash, uint192 key, uint64 seq) internal view returns (bool) {
+        return nonceSequence[refHash][key] == seq;
+    }
+
+    function _updateNonce(bytes32 refHash, uint192 key) internal {
+        nonceSequence[refHash][key]++;
+    }
+
     function _getCurrentRootHash(bytes32 refHash) internal view returns (bytes32) {
-        bytes32 rootHash = rootHashes[refHash];
-        return rootHash == bytes32(0) ? refHash : rootHash;
+        bytes32 currRootHash = rootHash[refHash];
+        return currRootHash == bytes32(0) ? refHash : currRootHash;
     }
 
     function _unpackNode(bytes calldata node) internal pure returns (address verifier, bytes memory config) {
