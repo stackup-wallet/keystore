@@ -115,7 +115,7 @@ interface Keystore {
     );
 
     function handleUpdates(UpdateAction[] calldata actions) external;
-    function validate(ValidateAction calldata action) external view returns (bool);
+    function validate(ValidateAction calldata action) external view returns (uint256 validationData);
 }
 ```
 
@@ -154,14 +154,16 @@ sequenceDiagram
         Keystore->>Keystore: Verify proof
         Keystore->>Verifier: Call validateData
         Verifier->>Verifier: Verify update data
-        Verifier->>Keystore: Return boolean
+        Verifier->>Keystore: Return validationData
         Keystore->>Keystore: Update root hash
     end
 ```
 
-This process begins with the `Caller` initiating the `handleUpdates` function on the `Keystore` contract. For every `UpdateAction` in the batch, the `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the update to the next root hash is valid and returns a corresponding boolean value.
+This process begins with the `Caller` initiating the `handleUpdates` function on the `Keystore` contract. For every `UpdateAction` in the batch, the `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the update to the next root hash is valid and returns a corresponding `validationData` value.
 
 Note that `handleUpdates` accepts a batch of `updateAction` objects by design in order to support use cases where other entities, such as solvers, are relaying updates on behalf of many accounts.
+
+The returned `validationData` is a `uint256` with no implied structure except for a literal value of `1` which MUST signal a failed validation. Besides this, the `Verifier` and downstream callers are free to interpret this value in any way they see fit. This pattern was made to be especially adaptable with ERC-4337 which has specific standards for packing `validUntil` and `validAfter` values for a transaction.
 
 ##### Replay protection
 
@@ -178,11 +180,11 @@ sequenceDiagram
     Keystore->>Keystore: Verify proof
     Keystore->>Verifier: Call validateData
     Verifier->>Verifier: Verify data
-    Verifier->>Keystore: Return boolean
-    Keystore->>Account: Return boolean
+    Verifier->>Keystore: Return validationData
+    Keystore->>Account: Return validationData
 ```
 
-During the account's validation phase, it makes a call to the `validate` function on the `Keystore`. The `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the given signature for the message is valid and returns the corresponding boolean value.
+During the account's validation phase, it makes a call to the `validate` function on the `Keystore`. The `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the given signature for the message is valid and returns the corresponding validationData value.
 
 ### Stateless `Verifier`
 
@@ -192,7 +194,10 @@ The `Verifier` is a contract that enables any arbitrary signature scheme with no
 
 ```solidity
 interface Verifier {
-    function validateData(bytes32 message, bytes calldata data, bytes calldata config) external view returns (bool);
+    function validateData(bytes32 message, bytes calldata data, bytes calldata config)
+        external
+        view
+        returns (uint256 validationData);
 }
 ```
 
