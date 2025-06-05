@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.28;
 
-import {UpdateAction, ValidateAction} from "./actions.sol";
+import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 
 interface IKeystore {
     error InvalidNonce();
@@ -14,5 +14,5 @@ interface IKeystore {
     );
 
     function handleUpdates(UpdateAction[] calldata actions) external;
-    function validate(ValidateAction calldata action) external view returns (bool);
+    function validate(ValidateAction calldata action) external view returns (uint256 validationData);
 }

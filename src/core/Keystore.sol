@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.28;
 
+import {SIG_VALIDATION_FAILED} from "account-abstraction/core/Helpers.sol";
+import {LibBytes} from "solady/utils/LibBytes.sol";
 import {MerkleProofLib} from "solady/utils/MerkleProofLib.sol";
-import {UpdateAction, ValidateAction} from "../interface/actions.sol";
+
 import {IKeystore} from "../interface/IKeystore.sol";
 import {IVerifier} from "../interface/IVerifier.sol";
+import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 
 contract Keystore is IKeystore {
     mapping(bytes32 => bytes32) public rootHash;
@@ -21,7 +24,7 @@ contract Keystore is IKeystore {
 
             (address verifier, bytes memory config) = _unpackNode(action.node);
             bytes32 message = keccak256(abi.encode(action.refHash, action.nextHash, action.nonce, nodeHash));
-            if (!IVerifier(verifier).validateData(message, action.data, config)) {
+            if (IVerifier(verifier).validateData(message, action.data, config) != SIG_VALIDATION_FAILED) {
                 emit RootHashUpdated(
                     action.refHash, action.nextHash, action.nonce, action.proof, action.node, action.data, false
                 );
@@ -35,7 +38,7 @@ contract Keystore is IKeystore {
         }
     }
 
-    function validate(ValidateAction calldata action) external view returns (bool) {
+    function validate(ValidateAction calldata action) external view returns (uint256 validationData) {
         require(
             MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash), keccak256(action.node)),
             InvalidProof()
@@ -67,11 +70,11 @@ contract Keystore is IKeystore {
         return currRootHash == bytes32(0) ? refHash : currRootHash;
     }
 
-    function _unpackNode(bytes calldata node) internal pure returns (address verifier, bytes memory config) {
+    function _unpackNode(bytes memory node) internal pure returns (address verifier, bytes memory config) {
         if (node.length < 20) revert InvalidNode();
-        else if (node.length > 20) config = bytes(node[20:]);
+        else if (node.length > 20) config = LibBytes.slice(node, 20, node.length);
 
-        verifier = address(bytes20(node[:20]));
+        verifier = address(bytes20(LibBytes.slice(node, 0, 20)));
         if (verifier == address(0)) {
             revert InvalidVerifier();
         }

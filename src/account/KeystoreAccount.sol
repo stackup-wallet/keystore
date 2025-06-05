@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+import {BaseAccount} from "account-abstraction/core/BaseAccount.sol";
+import {SIG_VALIDATION_FAILED} from "account-abstraction/core/Helpers.sol";
+import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
+import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
+import {Initializable} from "solady/utils/Initializable.sol";
+
+import {IKeystore} from "../interface/IKeystore.sol";
+import {ValidateAction} from "../lib/Actions.sol";
+import {ERC1271} from "../lib/ERC1271.sol";
+import {KeystoreUserOperation} from "../lib/KeystoreUserOperation.sol";
+
+contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
+    bytes32 public _refHash;
+
+    IEntryPoint private immutable _entryPoint;
+    IKeystore private immutable _keystore;
+
+    event KeystoreAccountInitialized(
+        IEntryPoint indexed entryPoint, IKeystore indexed keystore, bytes32 indexed refHash
+    );
+
+    function entryPoint() public view virtual override returns (IEntryPoint) {
+        return _entryPoint;
+    }
+
+    receive() external payable {}
+
+    constructor(IEntryPoint anEntryPoint, IKeystore aKeystore) {
+        _entryPoint = anEntryPoint;
+        _keystore = aKeystore;
+        _disableInitializers();
+    }
+
+    function initialize(bytes32 aRefHash) public virtual initializer {
+        _initialize(aRefHash);
+    }
+
+    function _initialize(bytes32 aRefHash) internal virtual {
+        _refHash = aRefHash;
+        emit KeystoreAccountInitialized(_entryPoint, _keystore, _refHash);
+    }
+
+    function _requireForExecute() internal view virtual override {
+        require(msg.sender == address(entryPoint()), "account: not EntryPoint");
+    }
+
+    function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        internal
+        virtual
+        override
+        returns (uint256 validationData)
+    {
+        ValidateAction memory action = KeystoreUserOperation.prepareValidateAction(userOp, userOpHash, _refHash);
+        return IKeystore(_keystore).validate(action);
+    }
+
+    function isValidSignature(bytes32 hash, bytes memory signature)
+        public
+        view
+        virtual
+        override
+        returns (bytes4 magicValue)
+    {
+        (bytes32[] memory proof, bytes memory node, bytes memory data) =
+            abi.decode(signature, (bytes32[], bytes, bytes));
+        ValidateAction memory action =
+            ValidateAction({refHash: _refHash, message: hash, proof: proof, node: node, data: data});
+        if (IKeystore(_keystore).validate(action) != SIG_VALIDATION_FAILED) {
+            return MAGICVALUE;
+        }
+    }
+
+    function getDeposit() public view returns (uint256) {
+        return entryPoint().balanceOf(address(this));
+    }
+
+    function addDeposit() public payable {
+        entryPoint().depositTo{value: msg.value}(address(this));
+    }
+
+    function withdrawDepositTo(address payable withdrawAddress, uint256 amount) public {
+        _requireForExecute();
+        entryPoint().withdrawTo(withdrawAddress, amount);
+    }
+}
