@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.28;
 
 import {BaseAccount} from "account-abstraction/core/BaseAccount.sol";
 import {SIG_VALIDATION_FAILED} from "account-abstraction/core/Helpers.sol";
