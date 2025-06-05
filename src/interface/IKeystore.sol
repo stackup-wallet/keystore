@@ -6,7 +6,6 @@ import {UpdateAction, ValidateAction} from "./actions.sol";
 interface IKeystore {
     error InvalidNonce();
     error InvalidProof();
-    error InvalidVerification();
     error InvalidNode();
     error InvalidVerifier();
 

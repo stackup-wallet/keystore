@@ -107,7 +107,6 @@ struct ValidateAction {
 interface Keystore {
     error InvalidNonce();
     error InvalidProof();
-    error InvalidVerification();
     error InvalidNode();
     error InvalidVerifier();
 
