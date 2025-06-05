@@ -35,16 +35,8 @@ contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
     }
 
     function initialize(bytes32 aRefHash) public virtual initializer {
-        _initialize(aRefHash);
-    }
-
-    function _initialize(bytes32 aRefHash) internal virtual {
         _refHash = aRefHash;
         emit KeystoreAccountInitialized(_entryPoint, _keystore, _refHash);
-    }
-
-    function _requireForExecute() internal view virtual override {
-        require(msg.sender == address(entryPoint()), "account: not EntryPoint");
     }
 
     function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
