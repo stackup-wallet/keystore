@@ -5,6 +5,7 @@ struct UpdateAction {
     bytes32 refHash;
     bytes32 nextHash;
     uint256 nonce;
+    address account;
     bytes32[] proof;
     bytes node;
     bytes data;
