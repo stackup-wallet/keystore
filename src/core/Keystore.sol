@@ -10,17 +10,20 @@ import {IVerifier} from "../interface/IVerifier.sol";
 import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 
 contract Keystore is IKeystore {
-    mapping(bytes32 => bytes32) public rootHash;
-    mapping(bytes32 => mapping(uint192 => uint256)) public nonceSequence;
+    mapping(bytes32 => mapping(address => bytes32)) public rootHash;
+    mapping(bytes32 => mapping(uint192 => mapping(address => uint256))) public nonceSequence;
 
     function handleUpdates(UpdateAction[] calldata actions) external {
         for (uint256 i = 0; i < actions.length; i++) {
             UpdateAction calldata action = actions[i];
             (uint192 nonceKey, uint64 nonceSeq) = _unpackNonceKey(action.nonce);
-            require(_validateNonce(action.refHash, nonceKey, nonceSeq), InvalidNonce());
+            require(_validateNonce(action.refHash, action.account, nonceKey, nonceSeq), InvalidNonce());
 
             bytes32 nodeHash = keccak256(action.node);
-            require(MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash), nodeHash), InvalidProof());
+            require(
+                MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash, action.account), nodeHash),
+                InvalidProof()
+            );
 
             (address verifier, bytes memory config) = _unpackNode(action.node);
             bytes32 message = keccak256(abi.encode(action.refHash, action.nextHash, action.nonce, nodeHash));
@@ -29,8 +32,8 @@ contract Keystore is IKeystore {
                     action.refHash, action.nextHash, action.nonce, action.proof, action.node, action.data, false
                 );
             } else {
-                rootHash[action.refHash] = action.nextHash;
-                _updateNonce(action.refHash, nonceKey);
+                rootHash[action.refHash][msg.sender] = action.nextHash;
+                _updateNonce(action.refHash, action.account, nonceKey);
                 emit RootHashUpdated(
                     action.refHash, action.nextHash, action.nonce, action.proof, action.node, action.data, true
                 );
@@ -40,7 +43,7 @@ contract Keystore is IKeystore {
 
     function validate(ValidateAction calldata action) external view returns (uint256 validationData) {
         require(
-            MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash), keccak256(action.node)),
+            MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash, msg.sender), keccak256(action.node)),
             InvalidProof()
         );
 
@@ -48,8 +51,8 @@ contract Keystore is IKeystore {
         return IVerifier(verifier).validateData(action.message, action.data, config);
     }
 
-    function getNonce(bytes32 refHash, uint192 key) public view returns (uint256 nonce) {
-        return nonceSequence[refHash][key] | (uint256(key) << 64);
+    function getNonce(bytes32 refHash, address account, uint192 key) public view returns (uint256 nonce) {
+        return nonceSequence[refHash][key][account] | (uint256(key) << 64);
     }
 
     function _unpackNonceKey(uint256 nonce) internal pure returns (uint192 nonceKey, uint64 nonceSeq) {
@@ -57,16 +60,16 @@ contract Keystore is IKeystore {
         nonceSeq = uint64(nonce);
     }
 
-    function _validateNonce(bytes32 refHash, uint192 key, uint64 seq) internal view returns (bool) {
-        return nonceSequence[refHash][key] == seq;
+    function _validateNonce(bytes32 refHash, address account, uint192 key, uint64 seq) internal view returns (bool) {
+        return nonceSequence[refHash][key][account] == seq;
     }
 
-    function _updateNonce(bytes32 refHash, uint192 key) internal {
-        nonceSequence[refHash][key]++;
+    function _updateNonce(bytes32 refHash, address account, uint192 key) internal {
+        nonceSequence[refHash][key][account]++;
     }
 
-    function _getCurrentRootHash(bytes32 refHash) internal view returns (bytes32) {
-        bytes32 currRootHash = rootHash[refHash];
+    function _getCurrentRootHash(bytes32 refHash, address account) internal view returns (bytes32) {
+        bytes32 currRootHash = rootHash[refHash][account];
         return currRootHash == bytes32(0) ? refHash : currRootHash;
     }
 

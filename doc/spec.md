@@ -91,6 +91,7 @@ struct UpdateAction {
     bytes32 refHash;
     bytes32 nextHash;
     uint256 nonce;
+    address account;
     bytes32[] proof;
     bytes node;
     bytes data;
@@ -124,7 +125,7 @@ interface Keystore {
 All root hashes in the `Keystore` contract MUST be stored in a mapping of the initial root hash to the current root hash.
 
 ```solidity
-mapping(bytes32 refHash => bytes32 currentHash)
+mapping(bytes32 => mapping(address => bytes32)) public rootHash;
 ```
 
 This is essential in order to provide an account with a permanent reference to the latest configuration. Without a permanent reference, it would be impossible for a dependent account to generate counterfactual addresses that are decoupled from configuration updates.
@@ -258,6 +259,33 @@ In order to not blow up the complexity of this spec, a built in method for gas c
 The Keystore is required to be a decoupled from the account in order to ensure configuration can always be updated regardless of whether or not the account is deployed. If this same approach was built into the smart account code, then syncing config across new chains must always be preceded by an account deployment. This is problematic given that the account deployment will then have to be validated with potentially outdated config.
 
 The singleton property is also required in order to preserve the deterministic deployment properties of a smart account. The smart account should always be initialized with the singleton address and `refHash`. What the `refHash` points to is then free to change and won't impact the account's deterministic address.
+
+### Relation to ERC-4337
+
+The specification makes no strong coupling to the ERC-4337 standard other than sharing a constant value for `validateData`. This is by design since the Keystore must be upstream of the smart account and agnostic to any particular account abstraction versions. However it is worth mentioning a couple of implementation details that makes integrating with ERC-4337 viable.
+
+#### ERC-7562 compliance
+
+The `Keystore` storage access was designed in order to make it compliant with the validation scope rules defined in ERC-7562. STO-10 of the validation rules outlines that read and writes to an external and non-entity contract must be associated with the account. This is why all storage is defined as a nested mapping that includes the account address in order to prevent the `Keystore` from being used for potential DoS attacks on the mempool. This not only makes it compatible with ERC-4337 but also future proofs it for native account abstraction too.
+
+#### Account and `Verifier` protocol
+
+During validation, an ERC-4337 account receives a `PackedUserOperation`. Account implementations SHOULD encode the `proof`, `node`, and `userOpHashSignature` into the initial `UserOperation` signature field. When the account calls to the `Keystore` during `validateUserOp` it SHOULD repack the `UserOperation` and replace the signature field with the `userOpHashSignature` only. An ERC-4337 aware `Verifier` SHOULD assume this during a `validateData` call.
+
+This repackaging is not strictly required but strongly recommended in order to reduce calldata size. The `validate` function on the `Keystore` requires a `ValidateAction` input which will need the `proof` and the `node`. Therefore the `data` should be a repacked `UserOperation` with the `proof` and `node` stripped out of its signature field to prevent redundant bytes. Further, the `proof` and `node` should only be required by `Keystore` to validate Merkle tree inclusion and is not generally used by the `Verifier`.
+
+More concretely, a call from an account's `validateUserOp` function to the `Keystore` could follow these simple steps:
+
+1. Decode `proof`, `node`, and `data` (i.e. `userOpHashSignature`) from `userOp.signature`
+2. Create a `ValidateAction` object with the following params:
+   - `refHash`: from account storage
+   - `message`: the `userOpHash` input
+   - `proof`: from the `userOp.signature`
+   - `node`: from the `userOp.signature`
+   - `data`: the repacked `userOp` (replaced signature field with `userOpHashSignature`)
+3. Call `validate` on the `Keystore` and return back the result
+
+An argument could be made that the `ValidateAction` data structure is redundant if the `Keystore` is made to be `userOp` aware. However, as mentioned above, we avoid this to make the `Keystore` maximally generalizable to downstream account abstraction interfaces.
 
 ## Security Considerations
 
