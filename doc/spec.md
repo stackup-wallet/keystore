@@ -141,6 +141,7 @@ Updating a configuration set is equivalent to updating the current root hash in 
 | `refHash`  | `bytes32`   | Permanent reference hash for the UCMT.                                                |
 | `nextHash` | `bytes32`   | Next root hash after the update.                                                      |
 | `nonce`    | `uint256`   | 2D nonce with packed `uint192` key and `uint64` sequence. Prevents replaying updates. |
+| `account`  | `address`   | The account address tied to this `refHash`.                                           |
 | `proof`    | `bytes32[]` | Merkle proof for the node.                                                            |
 | `node`     | `bytes`     | Node data containing `verifier` and `config`.                                         |
 | `data`     | `bytes`     | Arbitrary data for the verifier.                                                      |
@@ -229,12 +230,12 @@ When approaching the problem space, two primary requirements must be satisfied:
 1. A `Keystore` singleton must support arbitrary validation logic.
 2. The solution must be gas-efficient regardless of the validation scheme.
 
-As account validation evolves to accommodate increasingly complex scenarios, it is expected that the configuration size expands with it. A naive solution which directly stores configuration onchain may suffice for single validation methods like ECDSA or WebAuthn. However, this approach quickly becomes restrictive in terms of gas costs when implementing advanced use cases that cover the full spectrum of authentication and authorization.
+As account validation evolves to accommodate increasingly complex scenarios, it is expected that the configuration size expands with it. An alternate solution that directly stores configuration onchain may suffice for single validation methods like ECDSA or WebAuthn. However, this approach quickly becomes restrictive due to `SSTORE` gas costs when implementing advanced use cases that cover the full spectrum of authentication and authorization.
 
 Implementing a Merkle tree effectively addresses these concerns:
 
 - A `Verifier` adhering to the proposed interface can implement any arbitrary validation logic.
-- Gas efficiency is maximized by storing only the root hash in a single storage slot and handles verification in `O(log n)` space and time complexity (`n` equal to the total number of nodes).
+- Gas efficiency is optimized by storing only the root hash in a single storage slot and handles verification in `O(log n)` space and time complexity (`n` equal to the total number of nodes).
 
 This design decision also introduces important implications regarding privacy and data availability. By keeping the full configuration set offchain, accounts consequently benefit from enhanced privacy and allows them to selectively disclose validation details only when necessary. For instance, an account configured with an N/M guardian scheme can keep each guardian private until social recovery flows are explicitly triggered.
 
