@@ -6,7 +6,7 @@ Smart accounts currently face UX challenges in scaling configuration. We define 
 2. **Chain fragmentation**: If an account exists on `N` chains, a lot of friction is required to ensure cross-chain sync.
 3. **Lack of privacy**: Public exposure to an account's full configuration (e.g. a guardian set used for recovery) can introduce op-sec risk.
 
-On point 3, there are also significant UX challenges in a scenario where an account hasn't yet been deployed to a new chain. For example, in any setup that is initialized with an admin key, the user must retain secure access to the original admin key to deploy the account followed by an immediate rotation to the current key. This not only creates friction but also contradicts best practices of frequent and secure key rotations.
+On point 2, there are also significant UX challenges in a scenario where an account hasn't yet been deployed to a new chain. For example, in any setup that is initialized with an admin key, the user must retain secure access to the original admin key to deploy the account followed by an immediate rotation to the current key. This not only creates friction but also contradicts best practices of frequent and secure key rotations.
 
 This specification directly solves the gas and privacy issues while allowing composability with external cross-chain infrastructure to solve fragmentation.
 
