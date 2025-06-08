@@ -1,26 +1,18 @@
 # Merkle Tree Keystore for Account Abstraction
 
-A permissionless mechanism to decouple configuration from code to scale smart account validation with gas efficiency and privacy preserving properties.
-
-## Abstract
-
-The spec establishes a permissionless mechanism for decoupling a smart account's configuration from its code implementation. The solution centers around gas efficient Merkle tree proofs in order to validate account configuration at transaction time.
-
-## Motivation
-
-Smart accounts currently face UX challenges in scaling configuration. We define configuration here as any state that the account requires in order to validate transactions. Today, many smart accounts use simple schemes such as a single owner key or an N/M multisig setup. As smart account validation evolves (e.g. with permissions, multi-user sessions, and role-based access controls), configuration size also increases substantially. In this world, we quickly run into three primary issues.
+Smart accounts currently face UX challenges in scaling configuration. We define configuration here as any state that the account requires in order to validate transactions. Today, many smart accounts use simple schemes such as a single owner key or an N/M multisig setup. As smart account validation evolves (e.g. with permissions, multi-user sessions, and role-based access controls), configuration size also increases substantially. In this world, we quickly run into three issues.
 
 1. **Gas cost**: The onchain storage cost of configuration makes support for modern verification use cases unfeasible.
-2. **Lack of privacy**: Public exposure to an account's full configuration (e.g. a guardian set used for recovery) can introduce op-sec risk.
-3. **Chain fragmentation**: If an account exists on `N` chains, a lot of friction is required to ensure cross-chain sync.
+2. **Chain fragmentation**: If an account exists on `N` chains, a lot of friction is required to ensure cross-chain sync.
+3. **Lack of privacy**: Public exposure to an account's full configuration (e.g. a guardian set used for recovery) can introduce op-sec risk.
 
 On point 3, there are also significant UX challenges in a scenario where an account hasn't yet been deployed to a new chain. For example, in any setup that is initialized with an admin key, the user must retain secure access to the original admin key to deploy the account followed by an immediate rotation to the current key. This not only creates friction but also contradicts best practices of frequent and secure key rotations.
 
-This proposal primarily focuses on solving the gas and privacy issues. It does not solve chain fragmentation but opens a path to future viable solutions with the use of external cross-chain infrastructure.
+This specification directly solves the gas and privacy issues while allowing composability with external cross-chain infrastructure to solve fragmentation.
 
 ## Specification
 
-This proposal covers the specification of several key components:
+This approach covers 3 key components:
 
 1. `UserConfiguration` Merkle tree
 2. Singleton `Keystore` contract
@@ -80,7 +72,7 @@ The `Keystore` is a permissionless singleton contract that can be deployed on an
 
 1. Storing a reference to the latest UCMT root hash.
 2. Coordinating a UCMT root hash update.
-3. Coordinating the verification of a UCMT proof.
+3. Coordinating transaction validation from dependent accounts.
 
 #### `Keystore` interface
 
@@ -205,7 +197,7 @@ interface Verifier {
 
 The `data` input is passed in by the user during a transaction and the `config` input is always equal to the `config` portion of the UCMT `node`.
 
-In the example of a `SimpleECDSAVerifier`, the `data` is the 64 byte ECDSA signature while the `config` is the 20 byte signer address. The function `validateData` would then return an equality check on `config == ecrecover(message, data)`.
+In the example of an ECDSA verifier, the `data` could be the 64 byte ECDSA signature while the `config` is the 20 byte signer address. The function `validateData` would then return an equality check on `config == ecrecover(message, data)`.
 
 It is worth noting that there is no enforced data structure on the `data` and `config` input. This is entirely up to the `Verifier` to determine based on the intended validation scheme.
 
@@ -221,7 +213,7 @@ Note that `chainId` is not part of this message hash since it is expected that a
 
 ## Rationale
 
-Scaling smart account configuration involves many trade-offs. This section outlines why several key decisions were made for this spec.
+Scaling smart account configuration involves many trade-offs. This section outlines why several key decisions were made for this specification.
 
 ### Using a Merkle tree
 
@@ -235,7 +227,7 @@ As account validation evolves to accommodate increasingly complex scenarios, it 
 Implementing a Merkle tree effectively addresses these concerns:
 
 - A `Verifier` adhering to the proposed interface can implement any arbitrary validation logic.
-- Gas efficiency is optimized by storing only the root hash in a single storage slot and handles verification in `O(log n)` space and time complexity (`n` equal to the total number of nodes).
+- Gas cost is optimized by storing only the root hash in a single storage slot and handles verification in `O(log n)` space and time complexity (`n` equal to the total number of nodes).
 
 This design decision also introduces important implications regarding privacy and data availability. By keeping the full configuration set offchain, accounts consequently benefit from enhanced privacy and allows them to selectively disclose validation details only when necessary. For instance, an account configured with an N/M guardian scheme can keep each guardian private until social recovery flows are explicitly triggered.
 
@@ -243,7 +235,7 @@ Because configuration is stored offchain, accounts MUST have reliable access to 
 
 ### Cross-chain fragmentation
 
-We've mentioned earlier that one significant challenge in scaling account state is ensuring it remains in sync across many chains and access can always be granted on new chains using the latest config. Although this standard does not propose a direct solution it does open a pathway for composability with external relayer and solver infrastructure depending on the wallet's preference.
+We've mentioned earlier that one significant challenge in scaling account state is ensuring it remains in sync across many chains and access can always be granted on new chains using the latest config. Although this standard does not propose a direct solution it does open a pathway for composability with external cross-chain infrastructure depending on the wallet's preference.
 
 Since `Keystore` supports batch updating via `handleUpdates`, this enables any independent entity to update config on behalf of many accounts based on their own agreed upon trust assumptions or incentive models.
 
