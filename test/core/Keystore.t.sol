@@ -133,8 +133,9 @@ contract KeystoreTest is Test {
         emit IKeystore.RootHashUpdated(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data, true);
         keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
 
+        bytes32 expectedRootHash = nextHash == bytes32(0) ? inputs.root : nextHash;
         assertEq(keystore.getNonce(inputs.root, address(this), nonceKey), 1 | uint256(nonceKey) << 64);
-        assertEq(keystore.getRootHash(inputs.root, address(this)), nextHash);
+        assertEq(keystore.getRootHash(inputs.root, address(this)), expectedRootHash);
     }
 
     function testFuzz_handleUpdatesInvalidNonce(
