@@ -10,8 +10,8 @@ import {IVerifier} from "../interface/IVerifier.sol";
 import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 
 contract Keystore is IKeystore {
-    mapping(bytes32 => mapping(address => bytes32)) public rootHash;
-    mapping(bytes32 => mapping(uint192 => mapping(address => uint256))) public nonceSequence;
+    mapping(bytes32 => mapping(address => bytes32)) internal _rootHash;
+    mapping(bytes32 => mapping(uint192 => mapping(address => uint256))) internal _nonceSequence;
 
     function handleUpdates(UpdateAction[] calldata actions) external {
         for (uint256 i = 0; i < actions.length; i++) {
@@ -33,7 +33,7 @@ contract Keystore is IKeystore {
                     action.refHash, action.nextHash, action.nonce, action.proof, action.node, action.data, false
                 );
             } else {
-                rootHash[action.refHash][msg.sender] = action.nextHash;
+                _rootHash[action.refHash][msg.sender] = action.nextHash;
                 _updateNonce(action.refHash, action.account, nonceKey);
                 emit RootHashUpdated(
                     action.refHash, action.nextHash, action.nonce, action.proof, action.node, action.data, true
@@ -52,8 +52,12 @@ contract Keystore is IKeystore {
         return IVerifier(verifier).validateData(action.message, action.data, config);
     }
 
+    function getRootHash(bytes32 refHash, address account) public view returns (bytes32 rootHash) {
+        rootHash = _getCurrentRootHash(refHash, account);
+    }
+
     function getNonce(bytes32 refHash, address account, uint192 key) public view returns (uint256 nonce) {
-        return nonceSequence[refHash][key][account] | (uint256(key) << 64);
+        return _nonceSequence[refHash][key][account] | (uint256(key) << 64);
     }
 
     function _unpackNonceKey(uint256 nonce) internal pure returns (uint192 nonceKey, uint64 nonceSeq) {
@@ -62,15 +66,15 @@ contract Keystore is IKeystore {
     }
 
     function _validateNonce(bytes32 refHash, address account, uint192 key, uint64 seq) internal view returns (bool) {
-        return nonceSequence[refHash][key][account] == seq;
+        return _nonceSequence[refHash][key][account] == seq;
     }
 
     function _updateNonce(bytes32 refHash, address account, uint192 key) internal {
-        nonceSequence[refHash][key][account]++;
+        _nonceSequence[refHash][key][account]++;
     }
 
     function _getCurrentRootHash(bytes32 refHash, address account) internal view returns (bytes32) {
-        bytes32 currRootHash = rootHash[refHash][account];
+        bytes32 currRootHash = _rootHash[refHash][account];
         return currRootHash == bytes32(0) ? refHash : currRootHash;
     }
 
