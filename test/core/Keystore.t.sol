@@ -378,7 +378,7 @@ contract KeystoreTest is Test {
         bytes32[] memory tree = nodes;
         tree[index] = keccak256(node);
         root = ucmt.getRoot(tree);
-        proof = ucmt.getProof(nodes, index);
+        proof = ucmt.getProof(tree, index);
     }
 
     function _packNodeAndGetUpdateInputs(
