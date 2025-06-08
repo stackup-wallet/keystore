@@ -364,7 +364,7 @@ contract KeystoreTest is Test {
         node = abi.encodePacked(nodeVerifier, nodeConfig);
         tree[index] = keccak256(node);
         root = ucmt.getRoot(tree);
-        proof = ucmt.getProof(nodes, index);
+        proof = ucmt.getProof(tree, index);
     }
 
     function _generateUCMT(bytes32[] calldata nodes, uint256 index, bytes calldata node)
