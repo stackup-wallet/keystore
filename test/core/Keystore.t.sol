@@ -70,7 +70,12 @@ contract KeystoreTest is Test {
         (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
 
-        _mockVerifier(message, node, data, validationData);
+        vm.mockCall(
+            nodeVerifier,
+            abi.encodeWithSelector(IVerifier.validateData.selector, message, data, nodeConfig),
+            abi.encodePacked(validationData)
+        );
+
         ValidateAction memory action =
             ValidateAction({refHash: root, message: message, proof: proof, node: node, data: data});
         assertEq(keystore.validate(action), validationData);
@@ -90,7 +95,12 @@ contract KeystoreTest is Test {
             _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
         _registerProof(root, proof, node);
 
-        _mockVerifier(message, node, data, validationData);
+        vm.mockCall(
+            nodeVerifier,
+            abi.encodeWithSelector(IVerifier.validateData.selector, message, data, nodeConfig),
+            abi.encodePacked(validationData)
+        );
+
         ValidateAction memory action =
             ValidateAction({refHash: root, message: message, proof: "", node: node, data: data});
         assertEq(keystore.validate(action), validationData);
@@ -177,7 +187,11 @@ contract KeystoreTest is Test {
         UpdateInputs memory inputs =
             _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
 
-        _mockVerifier(inputs.message, inputs.node, data, SIG_VALIDATION_SUCCESS);
+        vm.mockCall(
+            nodeVerifier,
+            abi.encodeWithSelector(IVerifier.validateData.selector, inputs.message, data, nodeConfig),
+            abi.encodePacked(SIG_VALIDATION_SUCCESS)
+        );
         vm.expectEmit();
         emit IKeystore.RootHashUpdated(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data, true);
         keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
@@ -281,7 +295,11 @@ contract KeystoreTest is Test {
         UpdateInputs memory inputs =
             _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
 
-        _mockVerifier(inputs.message, inputs.node, data, SIG_VALIDATION_FAILED);
+        vm.mockCall(
+            nodeVerifier,
+            abi.encodeWithSelector(IVerifier.validateData.selector, inputs.message, data, nodeConfig),
+            abi.encodePacked(SIG_VALIDATION_FAILED)
+        );
         vm.expectEmit();
         emit IKeystore.RootHashUpdated(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data, false);
         keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
@@ -324,25 +342,42 @@ contract KeystoreTest is Test {
             data: hex"7b41359034736ce7bb5277e09979f3b337"
         });
 
-        _mockVerifier(
-            keccak256(
-                abi.encode(
-                    actions[0].refHash, actions[0].nextHash, address(this), actions[0].nonce, keccak256(actions[0].node)
-                )
+        vm.mockCall(
+            address(bytes20(actions[0].node)),
+            abi.encodeWithSelector(
+                IVerifier.validateData.selector,
+                keccak256(
+                    abi.encode(
+                        actions[0].refHash,
+                        actions[0].nextHash,
+                        address(this),
+                        actions[0].nonce,
+                        keccak256(actions[0].node)
+                    )
+                ),
+                actions[0].data,
+                LibBytes.slice(actions[0].node, 20, actions[0].node.length)
             ),
-            actions[0].node,
-            actions[0].data,
-            status[0] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED
+            abi.encodePacked(status[0] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED)
         );
-        _mockVerifier(
-            keccak256(
-                abi.encode(
-                    actions[1].refHash, actions[1].nextHash, address(this), actions[1].nonce, keccak256(actions[1].node)
-                )
+
+        vm.mockCall(
+            address(bytes20(actions[1].node)),
+            abi.encodeWithSelector(
+                IVerifier.validateData.selector,
+                keccak256(
+                    abi.encode(
+                        actions[1].refHash,
+                        actions[1].nextHash,
+                        address(this),
+                        actions[1].nonce,
+                        keccak256(actions[1].node)
+                    )
+                ),
+                actions[1].data,
+                LibBytes.slice(actions[1].node, 20, actions[1].node.length)
             ),
-            actions[1].node,
-            actions[1].data,
-            status[1] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED
+            abi.encodePacked(status[1] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED)
         );
 
         vm.expectEmit();
@@ -473,15 +508,5 @@ contract KeystoreTest is Test {
         });
         actions[0] = action;
         return actions;
-    }
-
-    function _mockVerifier(bytes32 message, bytes memory node, bytes memory data, uint256 validationData) internal {
-        vm.mockCall(
-            address(bytes20(node)),
-            abi.encodeWithSelector(
-                IVerifier.validateData.selector, message, data, LibBytes.slice(node, 20, node.length)
-            ),
-            abi.encodePacked(validationData)
-        );
     }
 }

@@ -48,14 +48,15 @@ contract Keystore is IKeystore {
     }
 
     function registerProof(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external {
+        bytes32 rootHash = _getCurrentRootHash(refHash, msg.sender);
         bytes32 nodeHash = keccak256(node);
-        require(MerkleProofLib.verify(proof, _getCurrentRootHash(refHash, msg.sender), nodeHash), InvalidProof());
+        require(MerkleProofLib.verify(proof, rootHash, nodeHash), InvalidProof());
 
-        _proofCache[refHash][nodeHash][msg.sender] = true;
+        _proofCache[rootHash][nodeHash][msg.sender] = true;
     }
 
     function proofRegistered(bytes32 refHash, address account, bytes calldata node) external view returns (bool) {
-        return _proofCache[refHash][keccak256(node)][account];
+        return _proofCache[_getCurrentRootHash(refHash, account)][keccak256(node)][account];
     }
 
     function getRootHash(bytes32 refHash, address account) external view returns (bytes32 rootHash) {
@@ -100,7 +101,7 @@ contract Keystore is IKeystore {
 
     function _validateProof(bytes32 refHash, address account, bytes calldata aProof, bytes32 nodeHash) internal view {
         if (aProof.length == 0) {
-            require(_proofCache[refHash][nodeHash][account], UnregisteredProof());
+            require(_proofCache[_getCurrentRootHash(refHash, account)][nodeHash][account], UnregisteredProof());
         } else {
             (bytes32[] memory proof) = abi.decode(aProof, (bytes32[]));
             require(MerkleProofLib.verify(proof, _getCurrentRootHash(refHash, account), nodeHash), InvalidProof());
