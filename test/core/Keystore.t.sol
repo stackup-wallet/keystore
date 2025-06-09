@@ -7,6 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {Merkle} from "murky/src/Merkle.sol";
 import {LibBytes} from "solady/utils/LibBytes.sol";
 
+import {VerifierMock} from "../mock/VerifierMock.sol";
 import {Keystore} from "../../src/core/Keystore.sol";
 import {IKeystore} from "../../src/interface/IKeystore.sol";
 import {IVerifier} from "../../src/interface/IVerifier.sol";
@@ -17,7 +18,7 @@ contract KeystoreTest is Test {
     Merkle public ucmt;
 
     struct UpdateInputs {
-        bytes32 root;
+        bytes32 refHash;
         bytes proof;
         bytes node;
         uint256 nonce;
@@ -37,11 +38,51 @@ contract KeystoreTest is Test {
         assertEq(keystore.getNonce(refHash, account, key), 0 | uint256(key) << 64);
     }
 
-    function testFuzz_proofRegistration(bytes32[] calldata nodes, uint256 index, bytes calldata node) public {
-        (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
-        assertEq(keystore.proofRegistered(root, address(this), node), false);
-        _registerProof(root, proof, node);
-        assertEq(keystore.proofRegistered(root, address(this), node), true);
+    function testFuzz_registerProof(bytes32[] calldata nodes, uint256 index, bytes calldata node) public {
+        (bytes32 refHash, bytes memory proof) = _generateUCMT(nodes, index, node);
+        assertEq(keystore.proofRegistered(refHash, address(this), node), false);
+        _registerProof(refHash, proof, node);
+        assertEq(keystore.proofRegistered(refHash, address(this), node), true);
+    }
+
+    function testFuzz_registerProofWithMultipleRootHashUpdates(
+        uint192 nonceKey,
+        bytes32[] calldata nodes,
+        bytes32[] calldata nextNodes,
+        bytes32 finalHash,
+        uint256 index,
+        bytes calldata nodeConfig,
+        bytes calldata data
+    ) public {
+        vm.assume(nextNodes.length > 1);
+        vm.assume(index < nextNodes.length);
+        address nodeVerifier = address(new VerifierMock(SIG_VALIDATION_SUCCESS));
+
+        (bytes32 nextHash,,) = _packNodeAndGenerateUCMT(nextNodes, index, nodeVerifier, nodeConfig);
+        UpdateInputs memory inputs =
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
+
+        // Registers a proof when rootHash == refHash
+        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), false);
+        _registerProof(inputs.refHash, inputs.proof, inputs.node);
+        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), true);
+
+        // Update rootHash to nextHash
+        keystore.handleUpdates(_getUpdateActions(inputs.refHash, nextHash, inputs.nonce, "", inputs.node, data));
+        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), false);
+
+        inputs =
+            _packNodeAndGetUpdateInputs(finalHash, nonceKey, nextNodes, index, nodeVerifier, nodeConfig, inputs.refHash);
+
+        // Registers a proof when rootHash == nextHash
+        _registerProof(inputs.refHash, inputs.proof, inputs.node);
+        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), true);
+
+        // Update rootHash to finalHash
+        // Note: if finalHash is zero, then we are essentially going back to the
+        // refHash where the node is already cached. This is expected.
+        keystore.handleUpdates(_getUpdateActions(inputs.refHash, finalHash, inputs.nonce, "", inputs.node, data));
+        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), finalHash == 0);
     }
 
     function testFuzz_proofRegistrationInvalidProof(
@@ -60,21 +101,14 @@ contract KeystoreTest is Test {
     function testFuzz_validate(
         bytes32[] calldata nodes,
         uint256 index,
-        address nodeVerifier,
         bytes calldata nodeConfig,
         bytes32 message,
         bytes calldata data,
         uint256 validationData
     ) public {
-        vm.assume(nodeVerifier != address(0));
+        address nodeVerifier = address(new VerifierMock(validationData));
         (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
-
-        vm.mockCall(
-            nodeVerifier,
-            abi.encodeWithSelector(IVerifier.validateData.selector, message, data, nodeConfig),
-            abi.encodePacked(validationData)
-        );
 
         ValidateAction memory action =
             ValidateAction({refHash: root, message: message, proof: proof, node: node, data: data});
@@ -84,22 +118,15 @@ contract KeystoreTest is Test {
     function testFuzz_validateRegisteredProof(
         bytes32[] calldata nodes,
         uint256 index,
-        address nodeVerifier,
         bytes calldata nodeConfig,
         bytes32 message,
         bytes calldata data,
         uint256 validationData
     ) public {
-        vm.assume(nodeVerifier != address(0));
+        address nodeVerifier = address(new VerifierMock(validationData));
         (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
         _registerProof(root, proof, node);
-
-        vm.mockCall(
-            nodeVerifier,
-            abi.encodeWithSelector(IVerifier.validateData.selector, message, data, nodeConfig),
-            abi.encodePacked(validationData)
-        );
 
         ValidateAction memory action =
             ValidateAction({refHash: root, message: message, proof: "", node: node, data: data});
@@ -179,26 +206,22 @@ contract KeystoreTest is Test {
         uint192 nonceKey,
         bytes32[] calldata nodes,
         uint256 index,
-        address nodeVerifier,
         bytes calldata nodeConfig,
         bytes calldata data
     ) public {
-        vm.assume(nodeVerifier != address(0));
+        address nodeVerifier = address(new VerifierMock(SIG_VALIDATION_SUCCESS));
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
 
-        vm.mockCall(
-            nodeVerifier,
-            abi.encodeWithSelector(IVerifier.validateData.selector, inputs.message, data, nodeConfig),
-            abi.encodePacked(SIG_VALIDATION_SUCCESS)
-        );
         vm.expectEmit();
-        emit IKeystore.RootHashUpdated(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data, true);
-        keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
+        emit IKeystore.RootHashUpdated(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data, true);
+        keystore.handleUpdates(
+            _getUpdateActions(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data)
+        );
 
-        bytes32 expectedRootHash = nextHash == bytes32(0) ? inputs.root : nextHash;
-        assertEq(keystore.getNonce(inputs.root, address(this), nonceKey), 1 | uint256(nonceKey) << 64);
-        assertEq(keystore.getRootHash(inputs.root, address(this)), expectedRootHash);
+        bytes32 expectedRootHash = nextHash == bytes32(0) ? inputs.refHash : nextHash;
+        assertEq(keystore.getNonce(inputs.refHash, address(this), nonceKey), 1 | uint256(nonceKey) << 64);
+        assertEq(keystore.getRootHash(inputs.refHash, address(this)), expectedRootHash);
     }
 
     function testFuzz_handleUpdatesInvalidNonce(
@@ -212,15 +235,15 @@ contract KeystoreTest is Test {
     ) public {
         vm.assume(nodeVerifier != address(0));
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
 
         vm.expectRevert(IKeystore.InvalidNonce.selector);
         keystore.handleUpdates(
-            _getUpdateActions(inputs.root, nextHash, inputs.nonce + 1, inputs.proof, inputs.node, data)
+            _getUpdateActions(inputs.refHash, nextHash, inputs.nonce + 1, inputs.proof, inputs.node, data)
         );
 
-        assertEq(keystore.getNonce(inputs.root, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
-        assertEq(keystore.getRootHash(inputs.root, address(this)), inputs.root);
+        assertEq(keystore.getNonce(inputs.refHash, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
+        assertEq(keystore.getRootHash(inputs.refHash, address(this)), inputs.refHash);
     }
 
     function testFuzz_handleUpdatesInvalidProof(
@@ -234,16 +257,18 @@ contract KeystoreTest is Test {
     ) public {
         vm.assume(nodeVerifier != address(0));
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
 
         bytes32[] memory badProof = new bytes32[](1);
         badProof[0] = bytes32(0);
         inputs.proof = abi.encode(badProof);
         vm.expectRevert(IKeystore.InvalidProof.selector);
-        keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
+        keystore.handleUpdates(
+            _getUpdateActions(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data)
+        );
 
-        assertEq(keystore.getNonce(inputs.root, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
-        assertEq(keystore.getRootHash(inputs.root, address(this)), inputs.root);
+        assertEq(keystore.getNonce(inputs.refHash, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
+        assertEq(keystore.getRootHash(inputs.refHash, address(this)), inputs.refHash);
     }
 
     function testFuzz_handleUpdatesInvalidNode(
@@ -255,13 +280,15 @@ contract KeystoreTest is Test {
         bytes calldata data
     ) public {
         vm.assume(node.length < 20);
-        UpdateInputs memory inputs = _getUpdateInputs(nextHash, nonceKey, nodes, index, node);
+        UpdateInputs memory inputs = _getUpdateInputs(nextHash, nonceKey, nodes, index, node, 0);
 
         vm.expectRevert(IKeystore.InvalidNode.selector);
-        keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
+        keystore.handleUpdates(
+            _getUpdateActions(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data)
+        );
 
-        assertEq(keystore.getNonce(inputs.root, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
-        assertEq(keystore.getRootHash(inputs.root, address(this)), inputs.root);
+        assertEq(keystore.getNonce(inputs.refHash, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
+        assertEq(keystore.getRootHash(inputs.refHash, address(this)), inputs.refHash);
     }
 
     function testFuzz_handleUpdatesInvalidVerifier(
@@ -273,13 +300,15 @@ contract KeystoreTest is Test {
         bytes calldata data
     ) public {
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, address(0), nodeConfig);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, address(0), nodeConfig, 0);
 
         vm.expectRevert(IKeystore.InvalidVerifier.selector);
-        keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
+        keystore.handleUpdates(
+            _getUpdateActions(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data)
+        );
 
-        assertEq(keystore.getNonce(inputs.root, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
-        assertEq(keystore.getRootHash(inputs.root, address(this)), inputs.root);
+        assertEq(keystore.getNonce(inputs.refHash, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
+        assertEq(keystore.getRootHash(inputs.refHash, address(this)), inputs.refHash);
     }
 
     function testFuzz_handleUpdatesInvalidValidation(
@@ -287,25 +316,21 @@ contract KeystoreTest is Test {
         uint192 nonceKey,
         bytes32[] calldata nodes,
         uint256 index,
-        address nodeVerifier,
         bytes calldata nodeConfig,
         bytes calldata data
     ) public {
-        vm.assume(nodeVerifier != address(0));
+        address nodeVerifier = address(new VerifierMock(SIG_VALIDATION_FAILED));
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
 
-        vm.mockCall(
-            nodeVerifier,
-            abi.encodeWithSelector(IVerifier.validateData.selector, inputs.message, data, nodeConfig),
-            abi.encodePacked(SIG_VALIDATION_FAILED)
-        );
         vm.expectEmit();
-        emit IKeystore.RootHashUpdated(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data, false);
-        keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
+        emit IKeystore.RootHashUpdated(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data, false);
+        keystore.handleUpdates(
+            _getUpdateActions(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data)
+        );
 
-        assertEq(keystore.getNonce(inputs.root, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
-        assertEq(keystore.getRootHash(inputs.root, address(this)), inputs.root);
+        assertEq(keystore.getNonce(inputs.refHash, address(this), nonceKey), 0 | uint256(nonceKey) << 64);
+        assertEq(keystore.getRootHash(inputs.refHash, address(this)), inputs.refHash);
     }
 
     function testFuzz_handleUpdatesBatch(bool[2] calldata status) public {
@@ -342,42 +367,26 @@ contract KeystoreTest is Test {
             data: hex"7b41359034736ce7bb5277e09979f3b337"
         });
 
-        vm.mockCall(
-            address(bytes20(actions[0].node)),
-            abi.encodeWithSelector(
-                IVerifier.validateData.selector,
-                keccak256(
-                    abi.encode(
-                        actions[0].refHash,
-                        actions[0].nextHash,
-                        address(this),
-                        actions[0].nonce,
-                        keccak256(actions[0].node)
-                    )
-                ),
-                actions[0].data,
-                LibBytes.slice(actions[0].node, 20, actions[0].node.length)
+        _mockVerifier(
+            keccak256(
+                abi.encode(
+                    actions[0].refHash, actions[0].nextHash, address(this), actions[0].nonce, keccak256(actions[0].node)
+                )
             ),
-            abi.encodePacked(status[0] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED)
+            actions[0].node,
+            actions[0].data,
+            status[0] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED
         );
 
-        vm.mockCall(
-            address(bytes20(actions[1].node)),
-            abi.encodeWithSelector(
-                IVerifier.validateData.selector,
-                keccak256(
-                    abi.encode(
-                        actions[1].refHash,
-                        actions[1].nextHash,
-                        address(this),
-                        actions[1].nonce,
-                        keccak256(actions[1].node)
-                    )
-                ),
-                actions[1].data,
-                LibBytes.slice(actions[1].node, 20, actions[1].node.length)
+        _mockVerifier(
+            keccak256(
+                abi.encode(
+                    actions[1].refHash, actions[1].nextHash, address(this), actions[1].nonce, keccak256(actions[1].node)
+                )
             ),
-            abi.encodePacked(status[1] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED)
+            actions[1].node,
+            actions[1].data,
+            status[1] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED
         );
 
         vm.expectEmit();
@@ -460,16 +469,25 @@ contract KeystoreTest is Test {
         bytes32[] calldata nodes,
         uint256 index,
         address nodeVerifier,
-        bytes calldata nodeConfig
+        bytes calldata nodeConfig,
+        bytes32 overrideRefHash
     ) internal view returns (UpdateInputs memory updateInputs) {
         (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
 
-        updateInputs.root = root;
+        updateInputs.refHash = overrideRefHash != 0 ? overrideRefHash : root;
         updateInputs.proof = proof;
         updateInputs.node = node;
-        updateInputs.nonce = keystore.getNonce(root, address(this), nonceKey);
-        updateInputs.message = keccak256(abi.encode(root, nextHash, address(this), updateInputs.nonce, keccak256(node)));
+        updateInputs.nonce = keystore.getNonce(overrideRefHash != 0 ? overrideRefHash : root, address(this), nonceKey);
+        updateInputs.message = keccak256(
+            abi.encode(
+                overrideRefHash != 0 ? overrideRefHash : root,
+                nextHash,
+                address(this),
+                updateInputs.nonce,
+                keccak256(node)
+            )
+        );
     }
 
     function _getUpdateInputs(
@@ -477,15 +495,24 @@ contract KeystoreTest is Test {
         uint192 nonceKey,
         bytes32[] calldata nodes,
         uint256 index,
-        bytes calldata node
+        bytes calldata node,
+        bytes32 overrideRefHash
     ) internal view returns (UpdateInputs memory updateInputs) {
         (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
 
-        updateInputs.root = root;
+        updateInputs.refHash = overrideRefHash != 0 ? overrideRefHash : root;
         updateInputs.proof = proof;
         updateInputs.node = node;
-        updateInputs.nonce = keystore.getNonce(root, address(this), nonceKey);
-        updateInputs.message = keccak256(abi.encode(root, nextHash, address(this), updateInputs.nonce, keccak256(node)));
+        updateInputs.nonce = keystore.getNonce(overrideRefHash != 0 ? overrideRefHash : root, address(this), nonceKey);
+        updateInputs.message = keccak256(
+            abi.encode(
+                overrideRefHash != 0 ? overrideRefHash : root,
+                nextHash,
+                address(this),
+                updateInputs.nonce,
+                keccak256(node)
+            )
+        );
     }
 
     function _getUpdateActions(
@@ -508,5 +535,15 @@ contract KeystoreTest is Test {
         });
         actions[0] = action;
         return actions;
+    }
+
+    function _mockVerifier(bytes32 message, bytes memory node, bytes memory data, uint256 validationData) internal {
+        vm.mockCall(
+            address(bytes20(node)),
+            abi.encodeWithSelector(
+                IVerifier.validateData.selector, message, data, LibBytes.slice(node, 20, node.length)
+            ),
+            abi.encodePacked(validationData)
+        );
     }
 }
