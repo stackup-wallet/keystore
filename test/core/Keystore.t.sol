@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "account-abstraction/core/Helpers.sol";
+import {console} from "forge-std/console.sol";
 import {Test} from "forge-std/Test.sol";
 import {Merkle} from "murky/src/Merkle.sol";
 import {LibBytes} from "solady/utils/LibBytes.sol";
@@ -17,7 +18,7 @@ contract KeystoreTest is Test {
 
     struct UpdateInputs {
         bytes32 root;
-        bytes32[] proof;
+        bytes proof;
         bytes node;
         uint256 nonce;
         bytes32 message;
@@ -36,6 +37,26 @@ contract KeystoreTest is Test {
         assertEq(keystore.getNonce(refHash, account, key), 0 | uint256(key) << 64);
     }
 
+    function testFuzz_proofRegistration(bytes32[] calldata nodes, uint256 index, bytes calldata node) public {
+        (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
+        assertEq(keystore.proofRegistered(root, address(this), node), false);
+        _registerProof(root, proof, node);
+        assertEq(keystore.proofRegistered(root, address(this), node), true);
+    }
+
+    function testFuzz_proofRegistrationInvalidProof(
+        bytes32[] calldata nodes,
+        bytes32[] calldata badProof,
+        uint256 index,
+        bytes calldata node
+    ) public {
+        (bytes32 root,) = _generateUCMT(nodes, index, node);
+        assertEq(keystore.proofRegistered(root, address(this), node), false);
+        vm.expectRevert(IKeystore.InvalidProof.selector);
+        _registerProof(root, abi.encode(badProof), node);
+        assertEq(keystore.proofRegistered(root, address(this), node), false);
+    }
+
     function testFuzz_validate(
         bytes32[] calldata nodes,
         uint256 index,
@@ -46,7 +67,7 @@ contract KeystoreTest is Test {
         uint256 validationData
     ) public {
         vm.assume(nodeVerifier != address(0));
-        (bytes32 root, bytes32[] memory proof, bytes memory node) =
+        (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
 
         vm.mockCall(
@@ -60,6 +81,48 @@ contract KeystoreTest is Test {
         assertEq(keystore.validate(action), validationData);
     }
 
+    function testFuzz_validateRegisteredProof(
+        bytes32[] calldata nodes,
+        uint256 index,
+        address nodeVerifier,
+        bytes calldata nodeConfig,
+        bytes32 message,
+        bytes calldata data,
+        uint256 validationData
+    ) public {
+        vm.assume(nodeVerifier != address(0));
+        (bytes32 root, bytes memory proof, bytes memory node) =
+            _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
+        _registerProof(root, proof, node);
+
+        vm.mockCall(
+            nodeVerifier,
+            abi.encodeWithSelector(IVerifier.validateData.selector, message, data, nodeConfig),
+            abi.encodePacked(validationData)
+        );
+
+        ValidateAction memory action =
+            ValidateAction({refHash: root, message: message, proof: "", node: node, data: data});
+        assertEq(keystore.validate(action), validationData);
+    }
+
+    function testFuzz_validateUnregisteredProof(
+        bytes32[] calldata nodes,
+        uint256 index,
+        address nodeVerifier,
+        bytes calldata nodeConfig,
+        bytes32 message,
+        bytes calldata data
+    ) public {
+        vm.assume(nodeVerifier != address(0));
+        (bytes32 root,, bytes memory node) = _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
+
+        ValidateAction memory action =
+            ValidateAction({refHash: root, message: message, proof: "", node: node, data: data});
+        vm.expectRevert(IKeystore.UnregisteredProof.selector);
+        keystore.validate(action);
+    }
+
     function testFuzz_validateInvalidProof(
         bytes32 badRoot,
         bytes32[] calldata nodes,
@@ -70,7 +133,7 @@ contract KeystoreTest is Test {
         bytes calldata data
     ) public {
         vm.assume(nodeVerifier != address(0));
-        (, bytes32[] memory proof, bytes memory node) = _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
+        (, bytes memory proof, bytes memory node) = _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
 
         ValidateAction memory action =
             ValidateAction({refHash: badRoot, message: message, proof: proof, node: node, data: data});
@@ -86,7 +149,7 @@ contract KeystoreTest is Test {
         bytes calldata data
     ) public {
         vm.assume(node.length < 20);
-        (bytes32 root, bytes32[] memory proof) = _generateUCMT(nodes, index, node);
+        (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
 
         ValidateAction memory action =
             ValidateAction({refHash: root, message: message, proof: proof, node: node, data: data});
@@ -102,7 +165,7 @@ contract KeystoreTest is Test {
         bytes calldata data
     ) public {
         address badVerifier = address(0);
-        (bytes32 root, bytes32[] memory proof, bytes memory node) =
+        (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nodes, index, badVerifier, nodeConfig);
 
         ValidateAction memory action =
@@ -173,7 +236,9 @@ contract KeystoreTest is Test {
         UpdateInputs memory inputs =
             _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
 
-        inputs.proof[inputs.proof.length - 1] = bytes32("0xdead");
+        bytes32[] memory badProof = new bytes32[](1);
+        badProof[0] = bytes32(0);
+        inputs.proof = abi.encode(badProof);
         vm.expectRevert(IKeystore.InvalidProof.selector);
         keystore.handleUpdates(_getUpdateActions(inputs.root, nextHash, inputs.nonce, inputs.proof, inputs.node, data));
 
@@ -246,34 +311,36 @@ contract KeystoreTest is Test {
     function testFuzz_handleUpdatesBatch(bool[2] calldata status) public {
         UpdateAction[] memory actions = new UpdateAction[](2);
 
+        bytes32[] memory proof0 = new bytes32[](4);
+        proof0[0] = 0xf0720b5a99da88909ea1349c9fadbc47a3dadb16815b68532caa1090fa3cc7c3;
+        proof0[1] = 0x1a9a5662b9f192a00b13ff9e28bfbc0594ad79a32760d4f5a2ee007c3bfa5140;
+        proof0[2] = 0xa0ba7f0cac2c1a8c549a6618333bbe1fc53c029126d1ae6c3c6002b3b4ba6524;
+        proof0[3] = 0x7a7f6bcecc35cccf14046a8016f81fb7a8ffee0d421195e67493fc7de1559744;
         actions[0] = UpdateAction({
             refHash: 0x0bea790c2d4a69970ebd6e09562a71084e5c78fef4d37528dd332cfb538542ce,
             nextHash: 0x307e09be09995e6faec1ee7e926814704ea5350149e0c43d3c33d08107993edd,
             nonce: 21345602813603236902997277615363180973908434092032,
             account: address(this),
-            proof: new bytes32[](4),
+            proof: abi.encode(proof0),
             node: hex"367bbe350864b020ff1b8b7e418a815c2a947f9d09eadce97d0c9c596ac47be1bcc4e0bf1582b3fb3cb5ea2acb22f8c2bc170f7479c2",
             data: hex"81cd7f87ae22c33efc08d02b0374fe09023334940745167021c9e66dc920557be866a02a2255351258770f722394e90644d8a14f06"
         });
-        actions[0].proof[0] = 0xf0720b5a99da88909ea1349c9fadbc47a3dadb16815b68532caa1090fa3cc7c3;
-        actions[0].proof[1] = 0x1a9a5662b9f192a00b13ff9e28bfbc0594ad79a32760d4f5a2ee007c3bfa5140;
-        actions[0].proof[2] = 0xa0ba7f0cac2c1a8c549a6618333bbe1fc53c029126d1ae6c3c6002b3b4ba6524;
-        actions[0].proof[3] = 0x7a7f6bcecc35cccf14046a8016f81fb7a8ffee0d421195e67493fc7de1559744;
 
+        bytes32[] memory proof1 = new bytes32[](5);
+        proof1[0] = 0xd75925ab1c24fe4af10b28baa7b632d28a52ffc73eae1a386152fd44e805fe15;
+        proof1[1] = 0xbfc020b001604c83cdaf1759486f5d4547d89278b8e90ee2e49cc9b8576cf3ee;
+        proof1[2] = 0xecd6bb55e8f496defad7865a73041e22a4a761938c6638e288e8380768e99c19;
+        proof1[3] = 0xf8a598929a6ff9a031bc9727bf8536a590d1dc764fe678d5595f8459221a8e25;
+        proof1[4] = 0xb0cf634098ce6f594f969fdde6243f10810a5a2817676821356a9aba230baf01;
         actions[1] = UpdateAction({
             refHash: 0x919c2e64fdfe95a09781da7a31cec323904edeece2aadab9db2809401f24feb1,
             nextHash: 0xf5856318a232ea9e7991756d7ed9f32e6128c84bfefee127f06bc23fd22c0296,
             nonce: 779254045811195516568393371847926550426994733077148739871778103143432192,
             account: address(this),
-            proof: new bytes32[](5),
+            proof: abi.encode(proof1),
             node: hex"217c31512a2fc94b172b5ef447d1deca0abf0c34a47ae671572752b2eafbb25ce40f59229f25811cfae1c253226d6b08cbecfd13e8b413cdbe616886c94b",
             data: hex"7b41359034736ce7bb5277e09979f3b337"
         });
-        actions[1].proof[0] = 0xd75925ab1c24fe4af10b28baa7b632d28a52ffc73eae1a386152fd44e805fe15;
-        actions[1].proof[1] = 0xbfc020b001604c83cdaf1759486f5d4547d89278b8e90ee2e49cc9b8576cf3ee;
-        actions[1].proof[2] = 0xecd6bb55e8f496defad7865a73041e22a4a761938c6638e288e8380768e99c19;
-        actions[1].proof[3] = 0xf8a598929a6ff9a031bc9727bf8536a590d1dc764fe678d5595f8459221a8e25;
-        actions[1].proof[4] = 0xb0cf634098ce6f594f969fdde6243f10810a5a2817676821356a9aba230baf01;
 
         vm.mockCall(
             address(bytes20(actions[0].node)),
@@ -352,12 +419,17 @@ contract KeystoreTest is Test {
     // Helper functions
     // ================================================================
 
+    function _registerProof(bytes32 refHash, bytes memory proof, bytes memory node) internal {
+        (bytes32[] memory proofArray) = abi.decode(proof, (bytes32[]));
+        keystore.registerProof(refHash, proofArray, node);
+    }
+
     function _packNodeAndGenerateUCMT(
         bytes32[] calldata nodes,
         uint256 index,
         address nodeVerifier,
         bytes calldata nodeConfig
-    ) internal view returns (bytes32 root, bytes32[] memory proof, bytes memory node) {
+    ) internal view returns (bytes32 root, bytes memory proof, bytes memory node) {
         vm.assume(nodes.length > 1);
         vm.assume(index < nodes.length);
 
@@ -365,13 +437,13 @@ contract KeystoreTest is Test {
         node = abi.encodePacked(nodeVerifier, nodeConfig);
         tree[index] = keccak256(node);
         root = ucmt.getRoot(tree);
-        proof = ucmt.getProof(tree, index);
+        proof = abi.encode(ucmt.getProof(tree, index));
     }
 
     function _generateUCMT(bytes32[] calldata nodes, uint256 index, bytes calldata node)
         internal
         view
-        returns (bytes32 root, bytes32[] memory proof)
+        returns (bytes32 root, bytes memory proof)
     {
         vm.assume(nodes.length > 1);
         vm.assume(index < nodes.length);
@@ -379,7 +451,7 @@ contract KeystoreTest is Test {
         bytes32[] memory tree = nodes;
         tree[index] = keccak256(node);
         root = ucmt.getRoot(tree);
-        proof = ucmt.getProof(tree, index);
+        proof = abi.encode(ucmt.getProof(tree, index));
     }
 
     function _packNodeAndGetUpdateInputs(
@@ -390,7 +462,7 @@ contract KeystoreTest is Test {
         address nodeVerifier,
         bytes calldata nodeConfig
     ) internal view returns (UpdateInputs memory updateInputs) {
-        (bytes32 root, bytes32[] memory proof, bytes memory node) =
+        (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
 
         updateInputs.root = root;
@@ -407,7 +479,7 @@ contract KeystoreTest is Test {
         uint256 index,
         bytes calldata node
     ) internal view returns (UpdateInputs memory updateInputs) {
-        (bytes32 root, bytes32[] memory proof) = _generateUCMT(nodes, index, node);
+        (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
 
         updateInputs.root = root;
         updateInputs.proof = proof;
@@ -420,7 +492,7 @@ contract KeystoreTest is Test {
         bytes32 refHash,
         bytes32 nextHash,
         uint256 nonce,
-        bytes32[] memory proof,
+        bytes memory proof,
         bytes memory node,
         bytes memory data
     ) internal view returns (UpdateAction[] memory) {

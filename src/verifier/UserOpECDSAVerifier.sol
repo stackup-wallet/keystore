@@ -3,12 +3,11 @@ pragma solidity ^0.8.28;
 
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "account-abstraction/core/Helpers.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {LibBytes} from "solady/utils/LibBytes.sol";
-import {WebAuthn} from "solady/utils/WebAuthn.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {IVerifier} from "../interface/IVerifier.sol";
 
-contract UserOpAdminWebAuthnVerifier is IVerifier {
+contract UserOpECDSAVerifier is IVerifier {
     address public immutable keystore;
 
     modifier onlyKeystore() {
@@ -27,16 +26,14 @@ contract UserOpAdminWebAuthnVerifier is IVerifier {
         onlyKeystore
         returns (uint256 validationData)
     {
-        WebAuthn.WebAuthnAuth memory auth = WebAuthn.tryDecodeAuth(data);
-        if (bytes(auth.clientDataJSON).length == 0) {
+        bytes memory signature = data;
+        if (signature.length > 65) {
             PackedUserOperation memory userOp = abi.decode(data, (PackedUserOperation));
-            auth = WebAuthn.tryDecodeAuth(userOp.signature);
+            signature = userOp.signature;
         }
 
-        bytes memory challenge = abi.encode(message);
-        bytes32 p256X = bytes32(LibBytes.slice(config, 0, 32));
-        bytes32 p256Y = bytes32(LibBytes.slice(config, 32, 64));
-
-        return WebAuthn.verify(challenge, true, auth, p256X, p256Y) ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED;
+        return address(bytes20(config)) == ECDSA.recover(message, signature)
+            ? SIG_VALIDATION_SUCCESS
+            : SIG_VALIDATION_FAILED;
     }
 }

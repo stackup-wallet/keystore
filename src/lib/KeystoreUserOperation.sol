@@ -9,9 +9,9 @@ library KeystoreUserOperation {
     function unpackOriginalUserOpSignature(bytes calldata userOpSignature)
         internal
         pure
-        returns (bytes32[] memory proof, bytes memory node, bytes memory signature)
+        returns (bytes memory proof, bytes memory node, bytes memory signature)
     {
-        (proof, node, signature) = abi.decode(userOpSignature, (bytes32[], bytes, bytes));
+        (proof, node, signature) = abi.decode(userOpSignature, (bytes, bytes, bytes));
     }
 
     function repackUserOpForValidateAction(PackedUserOperation calldata userOp, bytes memory signature)
@@ -38,7 +38,7 @@ library KeystoreUserOperation {
         pure
         returns (ValidateAction memory)
     {
-        (bytes32[] memory proof, bytes memory node, bytes memory signature) =
+        (bytes memory proof, bytes memory node, bytes memory signature) =
             unpackOriginalUserOpSignature(userOp.signature);
         bytes memory data = repackUserOpForValidateAction(userOp, signature);
 
