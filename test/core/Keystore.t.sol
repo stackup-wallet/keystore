@@ -85,7 +85,7 @@ contract KeystoreTest is Test {
         assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), finalHash == 0);
     }
 
-    function testFuzz_proofRegistrationInvalidProof(
+    function testFuzz_registerProofWithInvalidProof(
         bytes32[] calldata nodes,
         bytes32[] calldata badProof,
         uint256 index,
