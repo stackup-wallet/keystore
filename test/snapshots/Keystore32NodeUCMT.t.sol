@@ -105,13 +105,7 @@ contract Keystore32NodeUCMT is Test {
 
         vm.expectEmit();
         emit IKeystore.RootHashUpdated(
-            actions[0].refHash,
-            actions[0].nextHash,
-            actions[0].nonce,
-            actions[0].proof,
-            actions[0].node,
-            actions[0].data,
-            true
+            actions[0].refHash, actions[0].nextHash, actions[0].nonce, "", actions[0].node, actions[0].data, true
         );
         vm.startSnapshotGas("5. handleUpdates (without proof)");
         keystore.handleUpdates(actions);
