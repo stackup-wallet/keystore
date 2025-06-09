@@ -6,13 +6,13 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {Test} from "forge-std/Test.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
-import {UserOpAdminECDSAVerifier} from "../../src/verifier/UserOpAdminECDSAVerifier.sol";
+import {UserOpECDSAVerifier} from "../../src/verifier/UserOpECDSAVerifier.sol";
 
-contract UserOpAdminECDSAVerifierTest is Test {
-    UserOpAdminECDSAVerifier public verifier;
+contract UserOpECDSAVerifierTest is Test {
+    UserOpECDSAVerifier public verifier;
 
     function setUp() public {
-        verifier = new UserOpAdminECDSAVerifier(address(this));
+        verifier = new UserOpECDSAVerifier(address(this));
     }
 
     function testFuzz_validateData(bool withUserOp) public {

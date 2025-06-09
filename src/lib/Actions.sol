@@ -6,7 +6,7 @@ struct UpdateAction {
     bytes32 nextHash;
     uint256 nonce;
     address account;
-    bytes32[] proof;
+    bytes proof;
     bytes node;
     bytes data;
 }
@@ -14,7 +14,7 @@ struct UpdateAction {
 struct ValidateAction {
     bytes32 refHash;
     bytes32 message;
-    bytes32[] proof;
+    bytes proof;
     bytes node;
     bytes data;
 }

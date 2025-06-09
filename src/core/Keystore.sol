@@ -11,7 +11,8 @@ import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 
 contract Keystore is IKeystore {
     mapping(bytes32 => mapping(address => bytes32)) internal _rootHash;
-    mapping(bytes32 => mapping(uint192 => mapping(address => uint256))) internal _nonceSequence;
+    mapping(bytes32 => mapping(uint192 => mapping(address => uint64))) internal _nonceSequence;
+    mapping(bytes32 => mapping(bytes32 => mapping(address => bool))) internal _proofCache;
 
     function handleUpdates(UpdateAction[] calldata actions) external {
         for (uint256 i = 0; i < actions.length; i++) {
@@ -20,10 +21,7 @@ contract Keystore is IKeystore {
             require(_validateNonce(action.refHash, action.account, nonceKey, nonceSeq), InvalidNonce());
 
             bytes32 nodeHash = keccak256(action.node);
-            require(
-                MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash, action.account), nodeHash),
-                InvalidProof()
-            );
+            _validateProof(action.refHash, action.account, action.proof, nodeHash);
 
             (address verifier, bytes memory config) = _unpackNode(action.node);
             bytes32 message =
@@ -43,22 +41,35 @@ contract Keystore is IKeystore {
     }
 
     function validate(ValidateAction calldata action) external view returns (uint256 validationData) {
-        require(
-            MerkleProofLib.verify(action.proof, _getCurrentRootHash(action.refHash, msg.sender), keccak256(action.node)),
-            InvalidProof()
-        );
+        _validateProof(action.refHash, msg.sender, action.proof, keccak256(action.node));
 
         (address verifier, bytes memory config) = _unpackNode(action.node);
         return IVerifier(verifier).validateData(action.message, action.data, config);
     }
 
-    function getRootHash(bytes32 refHash, address account) public view returns (bytes32 rootHash) {
+    function registerProof(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external {
+        bytes32 rootHash = _getCurrentRootHash(refHash, msg.sender);
+        bytes32 nodeHash = keccak256(node);
+        require(MerkleProofLib.verify(proof, rootHash, nodeHash), InvalidProof());
+
+        _proofCache[rootHash][nodeHash][msg.sender] = true;
+    }
+
+    function proofRegistered(bytes32 refHash, address account, bytes calldata node) external view returns (bool) {
+        return _proofCache[_getCurrentRootHash(refHash, account)][keccak256(node)][account];
+    }
+
+    function getRootHash(bytes32 refHash, address account) external view returns (bytes32 rootHash) {
         rootHash = _getCurrentRootHash(refHash, account);
     }
 
-    function getNonce(bytes32 refHash, address account, uint192 key) public view returns (uint256 nonce) {
+    function getNonce(bytes32 refHash, address account, uint192 key) external view returns (uint256 nonce) {
         return _nonceSequence[refHash][key][account] | (uint256(key) << 64);
     }
+
+    // ================================================================
+    // Internal functions
+    // ================================================================
 
     function _unpackNonceKey(uint256 nonce) internal pure returns (uint192 nonceKey, uint64 nonceSeq) {
         nonceKey = uint192(nonce >> 64);
@@ -85,6 +96,15 @@ contract Keystore is IKeystore {
         verifier = address(bytes20(LibBytes.slice(node, 0, 20)));
         if (verifier == address(0)) {
             revert InvalidVerifier();
+        }
+    }
+
+    function _validateProof(bytes32 refHash, address account, bytes calldata aProof, bytes32 nodeHash) internal view {
+        if (aProof.length == 0) {
+            require(_proofCache[_getCurrentRootHash(refHash, account)][nodeHash][account], UnregisteredProof());
+        } else {
+            (bytes32[] memory proof) = abi.decode(aProof, (bytes32[]));
+            require(MerkleProofLib.verify(proof, _getCurrentRootHash(refHash, account), nodeHash), InvalidProof());
         }
     }
 }

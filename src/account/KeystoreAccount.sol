@@ -46,6 +46,11 @@ contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
         returns (uint256 validationData)
     {
         ValidateAction memory action = KeystoreUserOperation.prepareValidateAction(userOp, userOpHash, _refHash);
+        if (action.proof.length != 0) {
+            IKeystore(_keystore).registerProof(_refHash, abi.decode(action.proof, (bytes32[])), action.node);
+            action.proof = "";
+        }
+
         return IKeystore(_keystore).validate(action);
     }
 
@@ -56,8 +61,7 @@ contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
         override
         returns (bytes4 magicValue)
     {
-        (bytes32[] memory proof, bytes memory node, bytes memory data) =
-            abi.decode(signature, (bytes32[], bytes, bytes));
+        (bytes memory proof, bytes memory node, bytes memory data) = abi.decode(signature, (bytes, bytes, bytes));
         ValidateAction memory action =
             ValidateAction({refHash: _refHash, message: hash, proof: proof, node: node, data: data});
         if (IKeystore(_keystore).validate(action) != SIG_VALIDATION_FAILED) {
