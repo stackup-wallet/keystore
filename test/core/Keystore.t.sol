@@ -18,7 +18,7 @@ contract KeystoreTest is Test {
     Merkle public ucmt;
 
     struct UCMTProps {
-        bytes32 hash;
+        bytes32 root;
         bytes proof;
         bytes node;
     }
@@ -52,7 +52,6 @@ contract KeystoreTest is Test {
     }
 
     function testFuzz_registerProofWithMultipleRootHashUpdates(
-        uint192 nonceKey,
         bytes32[] calldata nodes,
         bytes32[] calldata nextNodes,
         bytes32 finalHash,
@@ -63,29 +62,30 @@ contract KeystoreTest is Test {
         vm.assume(nextNodes.length > 1 && index < nextNodes.length);
         address nodeVerifier = address(new VerifierMock(SIG_VALIDATION_SUCCESS));
 
+        UCMTProps memory init = _packNodeAndGenerateUCMTProps(nodes, index, nodeVerifier, nodeConfig);
         UCMTProps memory next = _packNodeAndGenerateUCMTProps(nextNodes, index, nodeVerifier, nodeConfig);
-        UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(next.hash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
+        assertNotEq(init.root, next.root);
+        assertNotEq(init.proof, next.proof);
+        assertEq(init.node, next.node);
 
         // Registers a proof when rootHash == refHash
-        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), false);
-        _registerProof(inputs.refHash, inputs.proof, inputs.node);
-        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), true);
+        assertEq(keystore.proofRegistered(init.root, address(this), init.node), false);
+        _registerProof(init.root, init.proof, init.node);
+        assertEq(keystore.proofRegistered(init.root, address(this), init.node), true);
 
         // Update rootHash to nextHash
-        keystore.handleUpdates(_getUpdateActions(inputs.refHash, next.hash, inputs.nonce, "", inputs.node, data));
-        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), false);
+        keystore.handleUpdates(_getUpdateActions(init.root, next.root, 0, "", init.node, data));
+        assertEq(keystore.proofRegistered(init.root, address(this), init.node), false);
 
         // Registers a proof when rootHash == nextHash
-        _registerProof(inputs.refHash, next.proof, next.node);
-        assertEq(keystore.proofRegistered(inputs.refHash, address(this), next.node), true);
+        _registerProof(init.root, next.proof, next.node);
+        assertEq(keystore.proofRegistered(init.root, address(this), init.node), true);
 
         // Update rootHash to finalHash
         // Note: if finalHash is zero, then we are essentially going back to the
         // refHash where the node is already cached. This is expected.
-        inputs = _getUpdateInputs(finalHash, nonceKey, nextNodes, index, next.node, inputs.refHash);
-        keystore.handleUpdates(_getUpdateActions(inputs.refHash, finalHash, inputs.nonce, "", next.node, data));
-        assertEq(keystore.proofRegistered(inputs.refHash, address(this), next.node), finalHash == 0);
+        keystore.handleUpdates(_getUpdateActions(init.root, finalHash, 1, "", next.node, data));
+        assertEq(keystore.proofRegistered(init.root, address(this), init.node), finalHash == 0);
     }
 
     function testFuzz_registerProofWithInvalidProof(
@@ -214,7 +214,7 @@ contract KeystoreTest is Test {
     ) public {
         address nodeVerifier = address(new VerifierMock(SIG_VALIDATION_SUCCESS));
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
 
         vm.expectEmit();
         emit IKeystore.RootHashUpdated(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data, true);
@@ -238,7 +238,7 @@ contract KeystoreTest is Test {
     ) public {
         vm.assume(nodeVerifier != address(0));
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
 
         vm.expectRevert(IKeystore.InvalidNonce.selector);
         keystore.handleUpdates(
@@ -260,7 +260,7 @@ contract KeystoreTest is Test {
     ) public {
         vm.assume(nodeVerifier != address(0));
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
 
         bytes32[] memory badProof = new bytes32[](1);
         badProof[0] = bytes32(0);
@@ -283,7 +283,7 @@ contract KeystoreTest is Test {
         bytes calldata data
     ) public {
         vm.assume(node.length < 20);
-        UpdateInputs memory inputs = _getUpdateInputs(nextHash, nonceKey, nodes, index, node, 0);
+        UpdateInputs memory inputs = _getUpdateInputs(nextHash, nonceKey, nodes, index, node);
 
         vm.expectRevert(IKeystore.InvalidNode.selector);
         keystore.handleUpdates(
@@ -303,7 +303,7 @@ contract KeystoreTest is Test {
         bytes calldata data
     ) public {
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, address(0), nodeConfig, 0);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, address(0), nodeConfig);
 
         vm.expectRevert(IKeystore.InvalidVerifier.selector);
         keystore.handleUpdates(
@@ -324,7 +324,7 @@ contract KeystoreTest is Test {
     ) public {
         address nodeVerifier = address(new VerifierMock(SIG_VALIDATION_FAILED));
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
+            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig);
 
         vm.expectEmit();
         emit IKeystore.RootHashUpdated(inputs.refHash, nextHash, inputs.nonce, inputs.proof, inputs.node, data, false);
@@ -472,12 +472,12 @@ contract KeystoreTest is Test {
         address nextNodeVerifier,
         bytes calldata nextNodeConfig
     ) internal view returns (UCMTProps memory props) {
-        (bytes32 nextHash, bytes memory nextProof, bytes memory nextNode) =
+        (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nextNodes, index, nextNodeVerifier, nextNodeConfig);
 
-        props.hash = nextHash;
-        props.proof = nextProof;
-        props.node = nextNode;
+        props.root = root;
+        props.proof = proof;
+        props.node = node;
     }
 
     function _packNodeAndGetUpdateInputs(
@@ -486,25 +486,16 @@ contract KeystoreTest is Test {
         bytes32[] calldata nodes,
         uint256 index,
         address nodeVerifier,
-        bytes calldata nodeConfig,
-        bytes32 overrideRefHash
+        bytes calldata nodeConfig
     ) internal view returns (UpdateInputs memory updateInputs) {
         (bytes32 root, bytes memory proof, bytes memory node) =
             _packNodeAndGenerateUCMT(nodes, index, nodeVerifier, nodeConfig);
 
-        updateInputs.refHash = overrideRefHash != 0 ? overrideRefHash : root;
+        updateInputs.refHash = root;
         updateInputs.proof = proof;
         updateInputs.node = node;
-        updateInputs.nonce = keystore.getNonce(overrideRefHash != 0 ? overrideRefHash : root, address(this), nonceKey);
-        updateInputs.message = keccak256(
-            abi.encode(
-                overrideRefHash != 0 ? overrideRefHash : root,
-                nextHash,
-                address(this),
-                updateInputs.nonce,
-                keccak256(node)
-            )
-        );
+        updateInputs.nonce = keystore.getNonce(root, address(this), nonceKey);
+        updateInputs.message = keccak256(abi.encode(root, nextHash, address(this), updateInputs.nonce, keccak256(node)));
     }
 
     function _getUpdateInputs(
@@ -512,24 +503,15 @@ contract KeystoreTest is Test {
         uint192 nonceKey,
         bytes32[] calldata nodes,
         uint256 index,
-        bytes memory node,
-        bytes32 overrideRefHash
+        bytes memory node
     ) internal view returns (UpdateInputs memory updateInputs) {
         (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
 
-        updateInputs.refHash = overrideRefHash != 0 ? overrideRefHash : root;
+        updateInputs.refHash = root;
         updateInputs.proof = proof;
         updateInputs.node = node;
-        updateInputs.nonce = keystore.getNonce(overrideRefHash != 0 ? overrideRefHash : root, address(this), nonceKey);
-        updateInputs.message = keccak256(
-            abi.encode(
-                overrideRefHash != 0 ? overrideRefHash : root,
-                nextHash,
-                address(this),
-                updateInputs.nonce,
-                keccak256(node)
-            )
-        );
+        updateInputs.nonce = keystore.getNonce(root, address(this), nonceKey);
+        updateInputs.message = keccak256(abi.encode(root, nextHash, address(this), updateInputs.nonce, keccak256(node)));
     }
 
     function _getUpdateActions(
