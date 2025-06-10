@@ -3,7 +3,6 @@ pragma solidity ^0.8.28;
 
 import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "account-abstraction/core/Helpers.sol";
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
-import {LibBytes} from "solady/utils/LibBytes.sol";
 import {WebAuthn} from "solady/utils/WebAuthn.sol";
 
 import {IVerifier} from "../interface/IVerifier.sol";
@@ -33,10 +32,7 @@ contract UserOpWebAuthnVerifier is IVerifier {
             auth = WebAuthn.tryDecodeAuth(userOp.signature);
         }
 
-        bytes memory challenge = abi.encode(message);
-        bytes32 p256X = bytes32(LibBytes.slice(config, 0, 32));
-        bytes32 p256Y = bytes32(LibBytes.slice(config, 32, 64));
-
-        return WebAuthn.verify(challenge, true, auth, p256X, p256Y) ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED;
+        (bytes32 x, bytes32 y) = abi.decode(config, (bytes32, bytes32));
+        return WebAuthn.verify(abi.encode(message), true, auth, x, y) ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED;
     }
 }
