@@ -17,6 +17,12 @@ contract KeystoreTest is Test {
     Keystore public keystore;
     Merkle public ucmt;
 
+    struct UCMTProps {
+        bytes32 hash;
+        bytes proof;
+        bytes node;
+    }
+
     struct UpdateInputs {
         bytes32 refHash;
         bytes proof;
@@ -54,13 +60,12 @@ contract KeystoreTest is Test {
         bytes calldata nodeConfig,
         bytes calldata data
     ) public {
-        vm.assume(nextNodes.length > 1);
-        vm.assume(index < nextNodes.length);
+        vm.assume(nextNodes.length > 1 && index < nextNodes.length);
         address nodeVerifier = address(new VerifierMock(SIG_VALIDATION_SUCCESS));
 
-        (bytes32 nextHash,,) = _packNodeAndGenerateUCMT(nextNodes, index, nodeVerifier, nodeConfig);
+        UCMTProps memory next = _packNodeAndGenerateUCMTProps(nextNodes, index, nodeVerifier, nodeConfig);
         UpdateInputs memory inputs =
-            _packNodeAndGetUpdateInputs(nextHash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
+            _packNodeAndGetUpdateInputs(next.hash, nonceKey, nodes, index, nodeVerifier, nodeConfig, 0);
 
         // Registers a proof when rootHash == refHash
         assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), false);
@@ -68,21 +73,19 @@ contract KeystoreTest is Test {
         assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), true);
 
         // Update rootHash to nextHash
-        keystore.handleUpdates(_getUpdateActions(inputs.refHash, nextHash, inputs.nonce, "", inputs.node, data));
+        keystore.handleUpdates(_getUpdateActions(inputs.refHash, next.hash, inputs.nonce, "", inputs.node, data));
         assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), false);
 
-        inputs =
-            _packNodeAndGetUpdateInputs(finalHash, nonceKey, nextNodes, index, nodeVerifier, nodeConfig, inputs.refHash);
-
         // Registers a proof when rootHash == nextHash
-        _registerProof(inputs.refHash, inputs.proof, inputs.node);
-        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), true);
+        _registerProof(inputs.refHash, next.proof, next.node);
+        assertEq(keystore.proofRegistered(inputs.refHash, address(this), next.node), true);
 
         // Update rootHash to finalHash
         // Note: if finalHash is zero, then we are essentially going back to the
         // refHash where the node is already cached. This is expected.
-        keystore.handleUpdates(_getUpdateActions(inputs.refHash, finalHash, inputs.nonce, "", inputs.node, data));
-        assertEq(keystore.proofRegistered(inputs.refHash, address(this), inputs.node), finalHash == 0);
+        inputs = _getUpdateInputs(finalHash, nonceKey, nextNodes, index, next.node, inputs.refHash);
+        keystore.handleUpdates(_getUpdateActions(inputs.refHash, finalHash, inputs.nonce, "", next.node, data));
+        assertEq(keystore.proofRegistered(inputs.refHash, address(this), next.node), finalHash == 0);
     }
 
     function testFuzz_registerProofWithInvalidProof(
@@ -449,7 +452,7 @@ contract KeystoreTest is Test {
         proof = abi.encode(ucmt.getProof(tree, index));
     }
 
-    function _generateUCMT(bytes32[] calldata nodes, uint256 index, bytes calldata node)
+    function _generateUCMT(bytes32[] calldata nodes, uint256 index, bytes memory node)
         internal
         view
         returns (bytes32 root, bytes memory proof)
@@ -461,6 +464,20 @@ contract KeystoreTest is Test {
         tree[index] = keccak256(node);
         root = ucmt.getRoot(tree);
         proof = abi.encode(ucmt.getProof(tree, index));
+    }
+
+    function _packNodeAndGenerateUCMTProps(
+        bytes32[] calldata nextNodes,
+        uint256 index,
+        address nextNodeVerifier,
+        bytes calldata nextNodeConfig
+    ) internal view returns (UCMTProps memory props) {
+        (bytes32 nextHash, bytes memory nextProof, bytes memory nextNode) =
+            _packNodeAndGenerateUCMT(nextNodes, index, nextNodeVerifier, nextNodeConfig);
+
+        props.hash = nextHash;
+        props.proof = nextProof;
+        props.node = nextNode;
     }
 
     function _packNodeAndGetUpdateInputs(
@@ -495,7 +512,7 @@ contract KeystoreTest is Test {
         uint192 nonceKey,
         bytes32[] calldata nodes,
         uint256 index,
-        bytes calldata node,
+        bytes memory node,
         bytes32 overrideRefHash
     ) internal view returns (UpdateInputs memory updateInputs) {
         (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
