@@ -11,10 +11,12 @@ import {KeystoreAccount} from "./KeystoreAccount.sol";
 
 contract KeystoreAccountFactory {
     KeystoreAccount public immutable accountImplementation;
+    IEntryPoint public immutable entryPoint;
     ISenderCreator public immutable senderCreator;
 
     constructor(IEntryPoint _entryPoint, IKeystore _keystore) {
         accountImplementation = new KeystoreAccount(_entryPoint, _keystore);
+        entryPoint = _entryPoint;
         senderCreator = _entryPoint.senderCreator();
     }
 
@@ -44,5 +46,9 @@ contract KeystoreAccountFactory {
                 )
             )
         );
+    }
+
+    function addPermanentEntryPointStake(uint32 unstakeDelaySec) external payable {
+        entryPoint.addStake{value: msg.value}(unstakeDelaySec);
     }
 }
