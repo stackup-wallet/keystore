@@ -12,7 +12,7 @@ import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 contract Keystore is IKeystore {
     mapping(bytes32 => mapping(address => bytes32)) internal _rootHash;
     mapping(bytes32 => mapping(uint192 => mapping(address => uint64))) internal _nonceSequence;
-    mapping(bytes32 => mapping(bytes32 => mapping(address => bytes))) internal _proofCache;
+    mapping(bytes32 => mapping(bytes32 => mapping(address => bytes))) internal _nodeCache;
 
     function handleUpdates(UpdateAction[] calldata actions) external {
         for (uint256 i = 0; i < actions.length; i++) {
@@ -54,7 +54,7 @@ contract Keystore is IKeystore {
         bytes32 nodeHash = keccak256(node);
         require(MerkleProofLib.verify(proof, rootHash, nodeHash), InvalidProof());
 
-        _proofCache[rootHash][nodeHash][msg.sender] = node;
+        _nodeCache[rootHash][nodeHash][msg.sender] = node;
     }
 
     function getRegisteredNode(bytes32 refHash, address account, bytes calldata node)
@@ -62,7 +62,7 @@ contract Keystore is IKeystore {
         view
         returns (bytes memory)
     {
-        return _proofCache[_getCurrentRootHash(refHash, account)][keccak256(node)][account];
+        return _nodeCache[_getCurrentRootHash(refHash, account)][keccak256(node)][account];
     }
 
     function getRootHash(bytes32 refHash, address account) external view returns (bytes32 rootHash) {
@@ -112,7 +112,7 @@ contract Keystore is IKeystore {
     {
         if (aProof.length == 0) {
             nodeHash = bytes32(aNode);
-            node = _proofCache[_getCurrentRootHash(refHash, account)][nodeHash][account];
+            node = _nodeCache[_getCurrentRootHash(refHash, account)][nodeHash][account];
             require(node.length >= 20, UnregisteredProof());
         } else {
             nodeHash = keccak256(aNode);
