@@ -17,8 +17,11 @@ interface IKeystore {
     function handleUpdates(UpdateAction[] calldata actions) external;
     function validate(ValidateAction calldata action) external view returns (uint256 validationData);
 
-    function registerProof(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external;
-    function proofRegistered(bytes32 refHash, address account, bytes calldata node) external view returns (bool);
+    function registerNode(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external;
+    function getRegisteredNode(bytes32 refHash, address account, bytes calldata node)
+        external
+        view
+        returns (bytes memory);
 
     function getRootHash(bytes32 refHash, address account) external view returns (bytes32 rootHash);
     function getNonce(bytes32 refHash, address account, uint192 key) external view returns (uint256 nonce);
