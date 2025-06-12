@@ -17,12 +17,12 @@ contract Keystore32NodeUCMT is Test {
         keystore = new Keystore();
     }
 
-    function test_registerProof() public {
+    function test_registerNode() public {
         bytes32[] memory proof = _getProof();
         ValidateAction memory action = _getValidateAction("");
 
-        vm.startSnapshotGas("1. registerProof");
-        keystore.registerProof(action.refHash, proof, action.node);
+        vm.startSnapshotGas("1. registerNode");
+        keystore.registerNode(action.refHash, proof, action.node);
         vm.stopSnapshotGas();
     }
 
@@ -41,10 +41,11 @@ contract Keystore32NodeUCMT is Test {
     function test_validate_withoutProof() public {
         bytes32[] memory proof = _getProof();
         ValidateAction memory action = _getValidateAction("");
-        keystore.registerProof(action.refHash, proof, action.node);
+        keystore.registerNode(action.refHash, proof, action.node);
 
         _mockVerifier(action.message, action.node, action.data);
 
+        action.node = abi.encode(keccak256(action.node));
         vm.startSnapshotGas("3. validate (without proof)");
         uint256 actualValidationData = keystore.validate(action);
         vm.stopSnapshotGas();
@@ -87,7 +88,7 @@ contract Keystore32NodeUCMT is Test {
     function test_handleUpdate_withoutProof() public {
         bytes32[] memory proof = _getProof();
         UpdateAction[] memory actions = _getUpdateActions("");
-        keystore.registerProof(actions[0].refHash, proof, actions[0].node);
+        keystore.registerNode(actions[0].refHash, proof, actions[0].node);
 
         _mockVerifier(
             keccak256(
@@ -107,6 +108,7 @@ contract Keystore32NodeUCMT is Test {
         emit IKeystore.RootHashUpdated(
             actions[0].refHash, actions[0].nextHash, actions[0].nonce, "", actions[0].node, actions[0].data, true
         );
+        actions[0].node = abi.encode(keccak256(actions[0].node));
         vm.startSnapshotGas("5. handleUpdates (without proof)");
         keystore.handleUpdates(actions);
         vm.stopSnapshotGas();
