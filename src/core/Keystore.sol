@@ -18,7 +18,7 @@ contract Keystore is IKeystore {
         for (uint256 i = 0; i < actions.length; i++) {
             UpdateAction calldata action = actions[i];
             (uint192 nonceKey, uint64 nonceSeq) = _unpackNonceKey(action.nonce);
-            require(_validateNonce(action.refHash, action.account, nonceKey, nonceSeq), InvalidNonce());
+            uint64 currSeq = _validateAndGetNonce(action.refHash, action.account, nonceKey, nonceSeq);
 
             (bytes32 nodeHash, bytes memory node) =
                 _validateNode(action.refHash, action.account, action.proof, action.node);
@@ -31,7 +31,7 @@ contract Keystore is IKeystore {
                 );
             } else {
                 _rootHash[action.refHash][action.account] = action.nextHash;
-                _updateNonce(action.refHash, action.account, nonceKey);
+                _incrementNonce(action.refHash, action.account, nonceKey, currSeq);
                 emit RootHashUpdated(
                     action.refHash, action.nextHash, action.nonce, action.proof, node, action.data, true
                 );
@@ -82,12 +82,17 @@ contract Keystore is IKeystore {
         nonceSeq = uint64(nonce);
     }
 
-    function _validateNonce(bytes32 refHash, address account, uint192 key, uint64 seq) internal view returns (bool) {
-        return _nonceSequence[refHash][key][account] == seq;
+    function _validateAndGetNonce(bytes32 refHash, address account, uint192 key, uint64 seq)
+        internal
+        view
+        returns (uint64 currSeq)
+    {
+        currSeq = _nonceSequence[refHash][key][account];
+        require(currSeq == seq, InvalidNonce());
     }
 
-    function _updateNonce(bytes32 refHash, address account, uint192 key) internal {
-        _nonceSequence[refHash][key][account]++;
+    function _incrementNonce(bytes32 refHash, address account, uint192 key, uint64 currSeq) internal {
+        _nonceSequence[refHash][key][account] = currSeq + 1;
     }
 
     function _getCurrentRootHash(bytes32 refHash, address account) internal view returns (bytes32) {
