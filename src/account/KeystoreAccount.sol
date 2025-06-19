@@ -26,6 +26,10 @@ contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
         return _entryPoint;
     }
 
+    function keystore() public view returns (IKeystore) {
+        return _keystore;
+    }
+
     receive() external payable {}
 
     constructor(IEntryPoint anEntryPoint, IKeystore aKeystore) {
@@ -49,6 +53,7 @@ contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
         if (action.proof.length != 0) {
             IKeystore(_keystore).registerNode(_refHash, abi.decode(action.proof, (bytes32[])), action.node);
             action.proof = "";
+            action.node = abi.encode(keccak256(action.node));
         }
 
         return IKeystore(_keystore).validate(action);
