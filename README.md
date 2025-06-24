@@ -4,6 +4,18 @@ This repository provides a complete implementation of a Merkle tree Keystore, a 
 
 **Refer to the [spec](./doc/spec.md) for a full deep dive into the implemented Keystore protocol.**
 
+## Deployments
+
+All contracts are deployed deterministically with the following addresses.
+
+| Contract               | Address                                      |
+| ---------------------- | -------------------------------------------- |
+| Keystore               | `0x18c90BdFc5667D11605ebde82E5E9CDC4D789363` |
+| KeystoreAccountFactory | `0xb79ab4c10270E9E120Ff776556746CA74F2cf0C4` |
+| UserOpECDSAVerifier    | `0xf5bC4DB1cdedf1aDDD0d6543BA669837d5D0f3b3` |
+| UserOpMultiSigVerifier | `0xC498f1f881bdd8a2FEB6aABf166cF6E08Cf4e559` |
+| UserOpWebAuthnVerifier | `0xEcb9be3dbB737Ed13a768B2B7D030B483Bf5c9f2` |
+
 ## Usage
 
 Before being able to run any command, you need to create a .env file and set your environment variables. You can follow the example in .env.example.
@@ -29,5 +41,14 @@ $ forge test
 ### Deploy
 
 ```shell
-$ source .env && forge script script/Deploy.s.sol:Deploy --rpc-url $RPC_URL --private-key $PRIVATE_KEY
+# Keystore
+source .env && forge script script/DeployKeystore.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+
+# Keystore account factory
+source .env && forge script script/DeployKeystoreAccountFactory.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+
+# Verifiers
+source .env && forge script script/DeployUserOpECDSAVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpMultiSigVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpWebAuthnVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
 ```
