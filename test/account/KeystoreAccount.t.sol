@@ -56,7 +56,7 @@ contract KeystoreAccountFactoryTest is Test {
         bytes memory signature = abi.encode(proof, node, data);
 
         KeystoreAccount account = _createAccount(root);
-        assertEq(account.isValidSignature(message, signature), bytes4(0x00000000));
+        assertEq(account.isValidSignature(message, signature), bytes4(0xffffffff));
     }
 
     function testFuzz_validateUserOp(

@@ -69,9 +69,10 @@ contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
         (bytes memory proof, bytes memory node, bytes memory data) = abi.decode(signature, (bytes, bytes, bytes));
         ValidateAction memory action =
             ValidateAction({refHash: _refHash, message: hash, proof: proof, node: node, data: data});
-        if (IKeystore(_keystore).validate(action) != SIG_VALIDATION_FAILED) {
-            return MAGICVALUE;
+        if (IKeystore(_keystore).validate(action) == SIG_VALIDATION_FAILED) {
+            return ERC1271_INVALID_VALUE;
         }
+        return ERC1271_VALID_VALUE;
     }
 
     function getDeposit() public view returns (uint256) {
