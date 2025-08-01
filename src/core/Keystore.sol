@@ -53,7 +53,7 @@ contract Keystore is IKeystore {
 
         bytes32 rootHash = _getCurrentRootHash(refHash, msg.sender);
         bytes32 nodeHash = keccak256(node);
-        require(MerkleProofLib.verify(proof, rootHash, nodeHash), InvalidProof());
+        require(MerkleProofLib.verifyCalldata(proof, rootHash, nodeHash), InvalidProof());
 
         _nodeCache[rootHash][nodeHash][msg.sender] = node;
     }
