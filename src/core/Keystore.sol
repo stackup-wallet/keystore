@@ -15,7 +15,8 @@ contract Keystore is IKeystore {
     mapping(bytes32 => mapping(bytes32 => mapping(address => bytes))) internal _nodeCache;
 
     function handleUpdates(UpdateAction[] calldata actions) external {
-        for (uint256 i = 0; i < actions.length; i++) {
+        uint256 length = actions.length;
+        for (uint256 i = 0; i < length; i++) {
             UpdateAction calldata action = actions[i];
             (uint192 nonceKey, uint64 nonceSeq) = _unpackNonceKey(action.nonce);
             uint64 currSeq = _validateAndGetNonce(action.refHash, action.account, nonceKey, nonceSeq);

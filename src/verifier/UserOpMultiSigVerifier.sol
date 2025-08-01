@@ -44,7 +44,8 @@ contract UserOpMultiSigVerifier is IVerifier {
         uint8 valid = 0;
         uint8 invalid = 0;
         bool[] memory seen = new bool[](owners.length);
-        for (uint256 i = 0; i < signatures.length; i++) {
+        uint256 length = signatures.length;
+        for (uint256 i = 0; i < length; i++) {
             SignerData memory sd = signatures[i];
 
             // Note: we need to ensure gas usage is consistent during simulation with dummy signers.
