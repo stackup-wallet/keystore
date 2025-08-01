@@ -50,7 +50,7 @@ contract KeystoreAccountFactory {
         );
     }
 
-    function addPermanentEntryPointStake(uint32 unstakeDelaySec) external payable {
-        entryPoint.addStake{value: msg.value}(unstakeDelaySec);
+    function addPermanentEntryPointStake() external payable {
+        entryPoint.addStake{value: msg.value}(type(uint32).max);
     }
 }
