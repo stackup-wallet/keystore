@@ -7,6 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 import {LibString} from "solady/utils/LibString.sol";
 
+import {OnlyKeystore} from "../../src/lib/OnlyKeystore.sol";
 import {UserOpMultiSigVerifier} from "../../src/verifier/UserOpMultiSigVerifier.sol";
 
 contract UserOpMultiSigVerifierTest is Test {
@@ -64,7 +65,7 @@ contract UserOpMultiSigVerifierTest is Test {
     function testFuzz_validateDataInvalidCaller(address keystore) public {
         vm.assume(keystore != address(this));
         vm.prank(keystore);
-        vm.expectRevert("verifier: not from Keystore");
+        vm.expectRevert(OnlyKeystore.NotFromKeystore.selector);
         verifier.validateData(0, "", "");
     }
 

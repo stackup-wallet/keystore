@@ -6,6 +6,7 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {Test} from "forge-std/Test.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
+import {OnlyKeystore} from "../../src/lib/OnlyKeystore.sol";
 import {UserOpECDSAVerifier} from "../../src/verifier/UserOpECDSAVerifier.sol";
 
 contract UserOpECDSAVerifierTest is Test {
@@ -50,7 +51,7 @@ contract UserOpECDSAVerifierTest is Test {
     function testFuzz_validateDataInvalidCaller(address keystore) public {
         vm.assume(keystore != address(this));
         vm.prank(keystore);
-        vm.expectRevert("verifier: not from Keystore");
+        vm.expectRevert(OnlyKeystore.NotFromKeystore.selector);
         verifier.validateData(0, "", "");
     }
 
