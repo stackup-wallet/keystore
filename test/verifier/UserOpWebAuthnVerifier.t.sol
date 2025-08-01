@@ -11,6 +11,7 @@ import {LibString} from "solady/utils/LibString.sol";
 import {P256} from "solady/utils/P256.sol";
 import {WebAuthn} from "solady/utils/WebAuthn.sol";
 
+import {OnlyKeystore} from "../../src/lib/OnlyKeystore.sol";
 import {UserOpWebAuthnVerifier} from "../../src/verifier/UserOpWebAuthnVerifier.sol";
 
 contract UserOpWebAuthnVerifierTest is Test {
@@ -70,7 +71,7 @@ contract UserOpWebAuthnVerifierTest is Test {
     function testFuzz_validateDataInvalidCaller(address keystore) public {
         vm.assume(keystore != address(this));
         vm.prank(keystore);
-        vm.expectRevert("verifier: not from Keystore");
+        vm.expectRevert(OnlyKeystore.NotFromKeystore.selector);
         verifier.validateData(0, "", "");
     }
 

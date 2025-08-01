@@ -58,7 +58,7 @@ contract KeystoreAccountFactoryTest is Test {
         vm.assume(caller != address(entryPoint.senderCreator()));
 
         vm.prank(caller);
-        vm.expectRevert("only callable from SenderCreator");
+        vm.expectRevert(KeystoreAccountFactory.NotFromSenderCreator.selector);
         factory.createAccount(refHash, salt);
     }
 }

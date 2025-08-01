@@ -10,6 +10,8 @@ import {IKeystore} from "../interface/IKeystore.sol";
 import {KeystoreAccount} from "./KeystoreAccount.sol";
 
 contract KeystoreAccountFactory {
+    error NotFromSenderCreator();
+
     KeystoreAccount public immutable accountImplementation;
     IEntryPoint public immutable entryPoint;
     ISenderCreator public immutable senderCreator;
@@ -21,7 +23,7 @@ contract KeystoreAccountFactory {
     }
 
     function createAccount(bytes32 refHash, uint256 salt) public returns (KeystoreAccount ret) {
-        require(msg.sender == address(senderCreator), "only callable from SenderCreator");
+        require(msg.sender == address(senderCreator), NotFromSenderCreator());
         address addr = getAddress(refHash, salt);
         uint256 codeSize = addr.code.length;
         if (codeSize > 0) {
