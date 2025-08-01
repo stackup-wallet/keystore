@@ -8,19 +8,12 @@ import {LibBytes} from "solady/utils/LibBytes.sol";
 import {WebAuthn} from "solady/utils/WebAuthn.sol";
 
 import {IVerifier} from "../interface/IVerifier.sol";
+import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 
-contract UserOpWebAuthnCosignVerifier is IVerifier {
+contract UserOpWebAuthnCosignVerifier is IVerifier, OnlyKeystore {
     bytes1 public constant SIGNATURES_ONLY_TAG = 0xff;
-    address public immutable keystore;
 
-    modifier onlyKeystore() {
-        require(msg.sender == keystore, "verifier: not from Keystore");
-        _;
-    }
-
-    constructor(address aKeystore) {
-        keystore = aKeystore;
-    }
+    constructor(address aKeystore) OnlyKeystore(aKeystore) {}
 
     function validateData(bytes32 message, bytes calldata data, bytes calldata config)
         external

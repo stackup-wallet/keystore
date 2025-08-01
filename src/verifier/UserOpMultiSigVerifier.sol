@@ -6,24 +6,17 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
 import {IVerifier} from "../interface/IVerifier.sol";
+import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 
-contract UserOpMultiSigVerifier is IVerifier {
+contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
     bytes1 public constant SIGNATURES_ONLY_TAG = 0xff;
-    address public immutable keystore;
 
     struct SignerData {
         uint8 index;
         bytes signature;
     }
 
-    modifier onlyKeystore() {
-        require(msg.sender == keystore, "verifier: not from Keystore");
-        _;
-    }
-
-    constructor(address aKeystore) {
-        keystore = aKeystore;
-    }
+    constructor(address aKeystore) OnlyKeystore(aKeystore) {}
 
     function validateData(bytes32 message, bytes calldata data, bytes calldata config)
         external
@@ -44,7 +37,8 @@ contract UserOpMultiSigVerifier is IVerifier {
         uint8 valid = 0;
         uint8 invalid = 0;
         bool[] memory seen = new bool[](owners.length);
-        for (uint256 i = 0; i < signatures.length; i++) {
+        uint256 length = signatures.length;
+        for (uint256 i = 0; i < length; i++) {
             SignerData memory sd = signatures[i];
 
             // Note: we need to ensure gas usage is consistent during simulation with dummy signers.

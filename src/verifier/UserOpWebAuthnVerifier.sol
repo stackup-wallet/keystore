@@ -6,18 +6,10 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
 import {WebAuthn} from "solady/utils/WebAuthn.sol";
 
 import {IVerifier} from "../interface/IVerifier.sol";
+import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 
-contract UserOpWebAuthnVerifier is IVerifier {
-    address public immutable keystore;
-
-    modifier onlyKeystore() {
-        require(msg.sender == keystore, "verifier: not from Keystore");
-        _;
-    }
-
-    constructor(address aKeystore) {
-        keystore = aKeystore;
-    }
+contract UserOpWebAuthnVerifier is IVerifier, OnlyKeystore {
+    constructor(address aKeystore) OnlyKeystore(aKeystore) {}
 
     function validateData(bytes32 message, bytes calldata data, bytes calldata config)
         external
