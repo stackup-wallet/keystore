@@ -10,6 +10,12 @@ import {WebAuthn} from "solady/utils/WebAuthn.sol";
 import {IVerifier} from "../interface/IVerifier.sol";
 import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 
+/**
+ * @dev This contract depends on the Solady P256.sol library which itself has a
+ * dependency on a VERIFIER and CANARY contract to properly handle the case where
+ * the RIP-7212 precompile might or might not be present.
+ * See https://github.com/Vectorized/solady/blob/v0.1.19/src/utils/P256.sol for details.
+ */
 contract UserOpWebAuthnCosignVerifier is IVerifier, OnlyKeystore {
     bytes1 public constant SIGNATURES_ONLY_TAG = 0xff;
 
