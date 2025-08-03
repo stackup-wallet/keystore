@@ -117,7 +117,7 @@ contract Keystore is IKeystore {
         returns (bytes32 nodeHash, bytes memory node)
     {
         if (aProof.length == 0) {
-            nodeHash = bytes32(aNode);
+            nodeHash = bytes32(aNode); // convert from bytes to bytes32
             node = _nodeCache[_getCurrentRootHash(refHash, account)][nodeHash][account];
             require(node.length >= 20, UnregisteredProof());
         } else {
