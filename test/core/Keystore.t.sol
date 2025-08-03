@@ -48,9 +48,10 @@ contract KeystoreTest is Test {
         vm.assume(node.length >= 20 && bytes20(node) != 0);
 
         (bytes32 refHash, bytes memory proof) = _generateUCMT(nodes, index, node);
-        assertEq(keystore.getRegisteredNode(refHash, address(this), keccak256(node)).length, 0);
+        bytes32 nodeHash = keccak256(node);
+        assertEq(keystore.getRegisteredNode(refHash, address(this), nodeHash).length, 0);
         _registerNode(refHash, proof, node);
-        assertGe(keystore.getRegisteredNode(refHash, address(this), keccak256(node)).length, 20);
+        assertGe(keystore.getRegisteredNode(refHash, address(this), nodeHash).length, 20);
     }
 
     function testFuzz_registerNodeWithMultipleRootHashUpdates(
