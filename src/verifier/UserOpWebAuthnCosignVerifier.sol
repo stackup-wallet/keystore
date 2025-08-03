@@ -40,7 +40,7 @@ contract UserOpWebAuthnCosignVerifier is IVerifier, OnlyKeystore {
         (address cosigner, bytes32 x, bytes32 y) = abi.decode(config, (address, bytes32, bytes32));
         WebAuthn.WebAuthnAuth memory auth = WebAuthn.tryDecodeAuth(webauthnData);
 
-        // Note: always run verification for both signatures in order maintain consistent gas usage
+        // Note: always run verification for both signatures in order calculate accurate gas estimates
         // during simulation with dummy signers.
         bool cosignValid = cosigner == ECDSA.recover(message, ecdsaSignature);
         bool webauthnValid = WebAuthn.verify(abi.encode(message), true, auth, x, y);
