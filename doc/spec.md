@@ -100,15 +100,25 @@ struct ValidateAction {
 interface Keystore {
     error InvalidNonce();
     error InvalidProof();
+    error UnregisteredProof();
     error InvalidNode();
     error InvalidVerifier();
 
     event RootHashUpdated(
-        bytes32 indexed refHash, bytes32 nextHash, uint256 nonce, bytes32[] proof, bytes node, bytes data, bool success
+        bytes32 indexed refHash, bytes32 nextHash, uint256 nonce, bytes proof, bytes node, bytes data, bool success
     );
 
     function handleUpdates(UpdateAction[] calldata actions) external;
     function validate(ValidateAction calldata action) external view returns (uint256 validationData);
+
+    function registerNode(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external;
+    function getRegisteredNode(bytes32 refHash, address account, bytes calldata node)
+        external
+        view
+        returns (bytes memory);
+
+    function getRootHash(bytes32 refHash, address account) external view returns (bytes32 rootHash);
+    function getNonce(bytes32 refHash, address account, uint192 key) external view returns (uint256 nonce);
 }
 ```
 
@@ -179,6 +189,17 @@ sequenceDiagram
 ```
 
 During the account's validation phase, it makes a call to the `validate` function on the `Keystore`. The `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the given signature for the message is valid and returns the corresponding validationData value.
+
+#### Optional node caching mechanism
+
+In the common case where a node is used for many transactions, it is a waste of gas to submit the same proof and node every time. Instead the `Keystore` has an optional method to cache a node with `registerNode`. This method will validate the UCMT proof and cache the `node` for a given `refHash` and `msg.sender`.
+
+During a validation flow, the `Keystore` will use the following logic to decide wether or not to use the cache:
+
+- **No cache**: If `action.proof` is NOT empty, then assume `action.node` is the actual `node` and run Merkle tree validation.
+- **With cache**: If `action.proof` is empty, then assume `action.node` is the hashed `keccak256` node. This is used to fetch the actual `node` from the cache and skip Merkle tree validation.
+
+Caching a node is optional since not all nodes can be assumed to be reused. Some use cases, such as an N/M guardian set for recovery, might be intended to only be used once. In such a case, the gas cost of caching is not required.
 
 ### Stateless `Verifier`
 
