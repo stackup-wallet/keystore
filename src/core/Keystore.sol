@@ -49,7 +49,7 @@ contract Keystore is IKeystore {
 
     function registerNode(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external {
         require(node.length >= 20, InvalidNode());
-        require(address(bytes20(LibBytes.slice(node, 0, 20))) != address(0), InvalidVerifier());
+        require(address(bytes20(node[0:20])) != address(0), InvalidVerifier());
 
         bytes32 rootHash = _getCurrentRootHash(refHash, msg.sender);
         bytes32 nodeHash = keccak256(node);
