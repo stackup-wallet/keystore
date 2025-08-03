@@ -53,7 +53,7 @@ contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
         if (action.proof.length != 0) {
             IKeystore(_keystore).registerNode(refHash, abi.decode(action.proof, (bytes32[])), action.node);
             action.proof = "";
-            action.node = abi.encode(keccak256(action.node));
+            action.node = bytes.concat(keccak256(action.node)); // convert from bytes32 to bytes
         }
 
         return IKeystore(_keystore).validate(action);
