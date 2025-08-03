@@ -48,9 +48,9 @@ contract KeystoreTest is Test {
         vm.assume(node.length >= 20 && bytes20(node) != 0);
 
         (bytes32 refHash, bytes memory proof) = _generateUCMT(nodes, index, node);
-        assertEq(keystore.getRegisteredNode(refHash, address(this), node).length, 0);
+        assertEq(keystore.getRegisteredNode(refHash, address(this), keccak256(node)).length, 0);
         _registerNode(refHash, proof, node);
-        assertGe(keystore.getRegisteredNode(refHash, address(this), node).length, 20);
+        assertGe(keystore.getRegisteredNode(refHash, address(this), keccak256(node)).length, 20);
     }
 
     function testFuzz_registerNodeWithMultipleRootHashUpdates(
@@ -71,26 +71,27 @@ contract KeystoreTest is Test {
         assertEq(init.node, next.node);
 
         // Registers a proof when rootHash == refHash
-        assertEq(keystore.getRegisteredNode(init.root, address(this), init.node).length, 0);
+        bytes32 initNodeHash = keccak256(init.node);
+        assertEq(keystore.getRegisteredNode(init.root, address(this), initNodeHash).length, 0);
         _registerNode(init.root, init.proof, init.node);
-        assertGe(keystore.getRegisteredNode(init.root, address(this), init.node).length, 20);
+        assertGe(keystore.getRegisteredNode(init.root, address(this), initNodeHash).length, 20);
 
         // Update rootHash to nextHash
-        keystore.handleUpdates(_getUpdateActions(init.root, next.root, 0, "", abi.encode(keccak256(init.node)), data));
-        assertEq(keystore.getRegisteredNode(init.root, address(this), init.node).length, 0);
+        keystore.handleUpdates(_getUpdateActions(init.root, next.root, 0, "", bytes.concat(initNodeHash), data));
+        assertEq(keystore.getRegisteredNode(init.root, address(this), initNodeHash).length, 0);
 
         // Registers a proof when rootHash == nextHash
         _registerNode(init.root, next.proof, next.node);
-        assertGe(keystore.getRegisteredNode(init.root, address(this), init.node).length, 20);
+        assertGe(keystore.getRegisteredNode(init.root, address(this), initNodeHash).length, 20);
 
         // Update rootHash to finalHash
         // Note: if finalHash is zero, then we are essentially going back to the
         // refHash where the node is already cached. This is expected.
-        keystore.handleUpdates(_getUpdateActions(init.root, finalHash, 1, "", abi.encode(keccak256(next.node)), data));
+        keystore.handleUpdates(_getUpdateActions(init.root, finalHash, 1, "", bytes.concat(keccak256(next.node)), data));
         if (finalHash == 0) {
-            assertGe(keystore.getRegisteredNode(init.root, address(this), init.node).length, 20);
+            assertGe(keystore.getRegisteredNode(init.root, address(this), initNodeHash).length, 20);
         } else {
-            assertEq(keystore.getRegisteredNode(init.root, address(this), init.node).length, 0);
+            assertEq(keystore.getRegisteredNode(init.root, address(this), initNodeHash).length, 0);
         }
     }
 
@@ -100,20 +101,22 @@ contract KeystoreTest is Test {
         vm.assume(node.length < 20);
 
         (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
-        assertEq(keystore.getRegisteredNode(root, address(this), node).length, 0);
+        bytes32 nodeHash = keccak256(node);
+        assertEq(keystore.getRegisteredNode(root, address(this), nodeHash).length, 0);
         vm.expectRevert(IKeystore.InvalidNode.selector);
         _registerNode(root, proof, node);
-        assertEq(keystore.getRegisteredNode(root, address(this), node).length, 0);
+        assertEq(keystore.getRegisteredNode(root, address(this), nodeHash).length, 0);
     }
 
     function testFuzz_registerNodeWithInvalidVerifier(bytes32[] calldata nodes, uint256 index) public {
         bytes memory node = abi.encode(address(0));
 
         (bytes32 root, bytes memory proof) = _generateUCMT(nodes, index, node);
-        assertEq(keystore.getRegisteredNode(root, address(this), node).length, 0);
+        bytes32 nodeHash = keccak256(node);
+        assertEq(keystore.getRegisteredNode(root, address(this), nodeHash).length, 0);
         vm.expectRevert(IKeystore.InvalidVerifier.selector);
         _registerNode(root, proof, node);
-        assertEq(keystore.getRegisteredNode(root, address(this), node).length, 0);
+        assertEq(keystore.getRegisteredNode(root, address(this), nodeHash).length, 0);
     }
 
     function testFuzz_registerNodeWithInvalidProof(
@@ -125,10 +128,11 @@ contract KeystoreTest is Test {
         vm.assume(node.length >= 20 && bytes20(node) != 0);
 
         (bytes32 root,) = _generateUCMT(nodes, index, node);
-        assertEq(keystore.getRegisteredNode(root, address(this), node).length, 0);
+        bytes32 nodeHash = keccak256(node);
+        assertEq(keystore.getRegisteredNode(root, address(this), nodeHash).length, 0);
         vm.expectRevert(IKeystore.InvalidProof.selector);
         _registerNode(root, abi.encode(badProof), node);
-        assertEq(keystore.getRegisteredNode(root, address(this), node).length, 0);
+        assertEq(keystore.getRegisteredNode(root, address(this), nodeHash).length, 0);
     }
 
     function testFuzz_validate(

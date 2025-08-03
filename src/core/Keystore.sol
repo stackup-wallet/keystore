@@ -58,12 +58,12 @@ contract Keystore is IKeystore {
         _nodeCache[rootHash][nodeHash][msg.sender] = node;
     }
 
-    function getRegisteredNode(bytes32 refHash, address account, bytes calldata node)
+    function getRegisteredNode(bytes32 refHash, address account, bytes32 nodeHash)
         external
         view
         returns (bytes memory)
     {
-        return _nodeCache[_getCurrentRootHash(refHash, account)][keccak256(node)][account];
+        return _nodeCache[_getCurrentRootHash(refHash, account)][nodeHash][account];
     }
 
     function getRootHash(bytes32 refHash, address account) external view returns (bytes32 rootHash) {
