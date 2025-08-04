@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {TokenCallbackHandler} from "account-abstraction/accounts/callback/TokenCallbackHandler.sol";
 import {BaseAccount} from "account-abstraction/core/BaseAccount.sol";
 import {SIG_VALIDATION_FAILED} from "account-abstraction/core/Helpers.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
@@ -12,7 +13,7 @@ import {ValidateAction} from "../lib/Actions.sol";
 import {ERC1271} from "../lib/ERC1271.sol";
 import {KeystoreUserOperation} from "../lib/KeystoreUserOperation.sol";
 
-contract KeystoreAccount is BaseAccount, ERC1271, Initializable {
+contract KeystoreAccount is BaseAccount, TokenCallbackHandler, ERC1271, Initializable {
     bytes32 public refHash;
 
     IEntryPoint private immutable _entryPoint;
