@@ -10,6 +10,8 @@ import {IVerifier} from "../interface/IVerifier.sol";
 import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 
 contract Keystore is IKeystore {
+    uint256 constant NODE_VERIFIER_LENGTH = 20;
+
     mapping(bytes32 => mapping(address => bytes32)) internal _rootHash;
     mapping(bytes32 => mapping(uint192 => mapping(address => uint64))) internal _nonceSequence;
     mapping(bytes32 => mapping(bytes32 => mapping(address => bytes))) internal _nodeCache;
@@ -48,8 +50,8 @@ contract Keystore is IKeystore {
     }
 
     function registerNode(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external {
-        require(node.length >= 20, InvalidNode());
-        require(address(bytes20(node[0:20])) != address(0), InvalidVerifier());
+        require(node.length >= NODE_VERIFIER_LENGTH, InvalidNode());
+        require(address(bytes20(node[0:NODE_VERIFIER_LENGTH])) != address(0), InvalidVerifier());
 
         bytes32 rootHash = _getCurrentRootHash(refHash, msg.sender);
         bytes32 nodeHash = keccak256(node);
@@ -102,10 +104,10 @@ contract Keystore is IKeystore {
     }
 
     function _unpackNode(bytes memory node) internal pure returns (address verifier, bytes memory config) {
-        if (node.length < 20) revert InvalidNode();
-        else if (node.length > 20) config = LibBytes.slice(node, 20, node.length);
+        if (node.length < NODE_VERIFIER_LENGTH) revert InvalidNode();
+        else if (node.length > NODE_VERIFIER_LENGTH) config = LibBytes.slice(node, NODE_VERIFIER_LENGTH, node.length);
 
-        verifier = address(bytes20(LibBytes.slice(node, 0, 20)));
+        verifier = address(bytes20(LibBytes.slice(node, 0, NODE_VERIFIER_LENGTH)));
         if (verifier == address(0)) {
             revert InvalidVerifier();
         }
@@ -119,7 +121,7 @@ contract Keystore is IKeystore {
         if (aProof.length == 0) {
             nodeHash = bytes32(aNode); // convert from bytes to bytes32
             node = _nodeCache[_getCurrentRootHash(refHash, account)][nodeHash][account];
-            require(node.length >= 20, UnregisteredProof());
+            require(node.length >= NODE_VERIFIER_LENGTH, UnregisteredProof());
         } else {
             nodeHash = keccak256(aNode);
             node = aNode;
