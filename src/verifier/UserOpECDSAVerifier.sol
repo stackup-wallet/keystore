@@ -16,7 +16,7 @@ contract UserOpECDSAVerifier is IVerifier, OnlyKeystore {
      * @param message The hashed message that was signed.
      * @param data The raw signature or a PackedUserOperation containing the signature.
      * If the length is more than 65 bytes, it will be decoded as a PackedUserOperation
-     * with the whose signature field containing the raw signature.
+     * with the userop.signature field containing the packed (r,s,v) signature values.
      * @param config The node configuration, expected to contain the 20 bytes ECDSA
      * signer address.
      * @return validationData Returns SIG_VALIDATION_SUCCESS (0) if ok, otherwise
