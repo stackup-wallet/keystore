@@ -11,6 +11,17 @@ import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 contract UserOpECDSAVerifier is IVerifier, OnlyKeystore {
     constructor(address aKeystore) OnlyKeystore(aKeystore) {}
 
+    /**
+     * @notice Called by the Keystore for nodes with ECDSA verification.
+     * @param message The hashed message that was signed.
+     * @param data The raw signature or a PackedUserOperation containing the signature.
+     * If the length is more than 65 bytes, it will be decoded as a PackedUserOperation
+     * with the whose signature field containing the raw signature.
+     * @param config The node configuration, expected to contain the 20 bytes ECDSA
+     * signer address.
+     * @return validationData Returns SIG_VALIDATION_SUCCESS (0) if ok, otherwise
+     * SIG_VALIDATION_FAILED (1).
+     */
     function validateData(bytes32 message, bytes calldata data, bytes calldata config)
         external
         view
