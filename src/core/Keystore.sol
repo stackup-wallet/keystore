@@ -12,9 +12,9 @@ import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 contract Keystore is IKeystore {
     uint256 constant NODE_VERIFIER_LENGTH = 20;
 
-    mapping(bytes32 => mapping(address => bytes32)) internal _rootHash;
-    mapping(bytes32 => mapping(uint192 => mapping(address => uint64))) internal _nonceSequence;
-    mapping(bytes32 => mapping(bytes32 => mapping(address => bytes))) internal _nodeCache;
+    mapping(bytes32 refHash => mapping(address account => bytes32 rootHash)) internal _rootHash;
+    mapping(bytes32 refHash => mapping(uint192 key => mapping(address account => uint64 seq))) internal _nonceSequence;
+    mapping(bytes32 rootHash => mapping(bytes32 nodeHash => mapping(address account => bytes node))) internal _nodeCache;
 
     function handleUpdates(UpdateAction[] calldata actions) external {
         uint256 length = actions.length;
