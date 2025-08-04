@@ -24,7 +24,7 @@ contract Keystore is IKeystore {
             uint64 currSeq = _validateAndGetNonce(action.refHash, action.account, nonceKey, nonceSeq);
 
             (bytes32 nodeHash, bytes memory node) =
-                _validateNode(action.refHash, action.account, action.proof, action.node);
+                _fetchOrValidateNode(action.refHash, action.account, action.proof, action.node);
             (address verifier, bytes memory config) = _unpackNode(node);
             bytes32 message =
                 keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash));
@@ -43,7 +43,7 @@ contract Keystore is IKeystore {
     }
 
     function validate(ValidateAction calldata action) external view returns (uint256 validationData) {
-        (, bytes memory node) = _validateNode(action.refHash, msg.sender, action.proof, action.node);
+        (, bytes memory node) = _fetchOrValidateNode(action.refHash, msg.sender, action.proof, action.node);
 
         (address verifier, bytes memory config) = _unpackNode(node);
         return IVerifier(verifier).validateData(action.message, action.data, config);
@@ -113,7 +113,7 @@ contract Keystore is IKeystore {
         }
     }
 
-    function _validateNode(bytes32 refHash, address account, bytes calldata aProof, bytes calldata aNode)
+    function _fetchOrValidateNode(bytes32 refHash, address account, bytes calldata aProof, bytes calldata aNode)
         internal
         view
         returns (bytes32 nodeHash, bytes memory node)
