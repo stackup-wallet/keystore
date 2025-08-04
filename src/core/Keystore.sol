@@ -105,9 +105,9 @@ contract Keystore is IKeystore {
 
     function _unpackNode(bytes memory node) internal pure returns (address verifier, bytes memory config) {
         if (node.length < NODE_VERIFIER_LENGTH) revert InvalidNode();
-        else if (node.length > NODE_VERIFIER_LENGTH) config = LibBytes.slice(node, NODE_VERIFIER_LENGTH, node.length);
 
         verifier = address(bytes20(LibBytes.slice(node, 0, NODE_VERIFIER_LENGTH)));
+        config = LibBytes.slice(node, NODE_VERIFIER_LENGTH, node.length);
         if (verifier == address(0)) {
             revert InvalidVerifier();
         }
