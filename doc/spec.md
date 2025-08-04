@@ -84,7 +84,7 @@ struct UpdateAction {
     bytes32 nextHash;
     uint256 nonce;
     address account;
-    bytes32[] proof;
+    bytes proof;
     bytes node;
     bytes data;
 }
@@ -92,7 +92,7 @@ struct UpdateAction {
 struct ValidateAction {
     bytes32 refHash;
     bytes32 message;
-    bytes32[] proof;
+    bytes proof;
     bytes node;
     bytes data;
 }
@@ -124,15 +124,15 @@ interface Keystore {
 
 #### Storage of root hashes
 
-All root hashes in the `Keystore` contract MUST be stored in a mapping of the initial root hash to the current root hash.
+All root hashes in the `Keystore` contract MUST be stored in a mapping of the initial root hash (i.e. the `refHash`) to the current root hash.
 
 ```solidity
-mapping(bytes32 => mapping(address => bytes32)) public rootHash;
+mapping(bytes32 refHash => mapping(address account => bytes32 rootHash)) internal _rootHash;
 ```
 
 This is essential in order to provide an account with a permanent reference to the latest configuration. Without a permanent reference, it would be impossible for a dependent account to generate counterfactual addresses that are decoupled from configuration updates.
 
-In the initial edge case where `currentHash` is equal to zero, then the `Keystore` MUST assume the `refHash` as the value.
+In the initial edge case where `rootHash` is equal to zero, then the `Keystore` MUST assume the `refHash` as the current root hash. External systems are able to query for the current root hash using the `getRootHash` method which takes this logic into consideration.
 
 #### Handling root hash updates
 
