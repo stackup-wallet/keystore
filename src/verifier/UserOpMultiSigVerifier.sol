@@ -9,6 +9,8 @@ import {IVerifier} from "../interface/IVerifier.sol";
 import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 
 contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
+    error ZeroThresholdNotAllowed();
+
     bytes1 public constant SIGNATURES_ONLY_TAG = 0xff;
 
     struct SignerData {
@@ -41,6 +43,8 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
         returns (uint256 validationData)
     {
         (uint8 threshold, address[] memory owners) = abi.decode(config, (uint8, address[]));
+        require(threshold > 0, ZeroThresholdNotAllowed());
+
         SignerData[] memory signatures;
         if (bytes1(data[0]) == SIGNATURES_ONLY_TAG) {
             (signatures) = abi.decode(data[1:], (SignerData[]));

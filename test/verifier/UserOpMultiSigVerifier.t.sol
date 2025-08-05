@@ -62,6 +62,26 @@ contract UserOpMultiSigVerifierTest is Test {
         assertEq(validationData, SIG_VALIDATION_FAILED);
     }
 
+    function testFuzz_validateDataZeroThreshold(bool withUserOp, uint8 offset, uint8 size) public {
+        uint8 threshold = 0;
+        Signer[] memory signers = _createSigners(size);
+
+        bytes32 message = keccak256("Signed by signer");
+        bytes memory data = _createData(message, threshold, offset, signers);
+        if (withUserOp) {
+            PackedUserOperation memory userOp;
+            userOp.signature = data;
+            data = abi.encode(userOp);
+        } else {
+            data = abi.encodePacked(verifier.SIGNATURES_ONLY_TAG(), data);
+        }
+
+        bytes memory config = _createConfig(threshold, signers);
+
+        vm.expectRevert(UserOpMultiSigVerifier.ZeroThresholdNotAllowed.selector);
+        verifier.validateData(message, data, config);
+    }
+
     function testFuzz_validateDataInvalidCaller(address keystore) public {
         vm.assume(keystore != address(this));
         vm.prank(keystore);
