@@ -82,6 +82,26 @@ contract UserOpMultiSigVerifierTest is Test {
         verifier.validateData(message, data, config);
     }
 
+    function testFuzz_validateDataMaxOwners(bool withUserOp, uint8 threshold, uint8 offset, uint8 excess) public {
+        uint16 size = _getSizeAndAssumeMaxOwnerLimitExceeded(threshold, offset, excess);
+        Signer[] memory signers = _createSigners(size);
+
+        bytes32 message = keccak256("Signed by signer");
+        bytes memory data = _createData(message, threshold, offset, signers);
+        if (withUserOp) {
+            PackedUserOperation memory userOp;
+            userOp.signature = data;
+            data = abi.encode(userOp);
+        } else {
+            data = abi.encodePacked(verifier.SIGNATURES_ONLY_TAG(), data);
+        }
+
+        bytes memory config = _createConfig(threshold, signers);
+
+        vm.expectRevert(UserOpMultiSigVerifier.MaxOwnersLimitExceeded.selector);
+        verifier.validateData(message, data, config);
+    }
+
     function testFuzz_validateDataInvalidCaller(address keystore) public {
         vm.assume(keystore != address(this));
         vm.prank(keystore);
@@ -103,9 +123,19 @@ contract UserOpMultiSigVerifierTest is Test {
         vm.assume(uint16(threshold) + uint16(offset) <= size);
     }
 
-    function _createSigners(uint8 size) internal returns (Signer[] memory) {
+    function _getSizeAndAssumeMaxOwnerLimitExceeded(uint8 threshold, uint8 offset, uint8 excess)
+        internal
+        pure
+        returns (uint16 size)
+    {
+        size = uint16(type(uint8).max) + excess;
+        vm.assume(threshold > 0 && excess > 0);
+        vm.assume(uint16(threshold) + uint16(offset) <= size);
+    }
+
+    function _createSigners(uint16 size) internal returns (Signer[] memory) {
         Signer[] memory signers = new Signer[](size);
-        for (uint8 i = 0; i < size; i++) {
+        for (uint16 i = 0; i < size; i++) {
             (address addr, uint256 pk) = makeAddrAndKey(LibString.toString(i));
             signers[i] = Signer({addr: addr, pk: pk});
         }
@@ -127,9 +157,9 @@ contract UserOpMultiSigVerifierTest is Test {
         returns (bytes memory)
     {
         UserOpMultiSigVerifier.SignerData[] memory sd = new UserOpMultiSigVerifier.SignerData[](threshold);
-        for (uint8 i = 0; i < threshold; i++) {
+        for (uint16 i = 0; i < threshold; i++) {
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[i + offset].pk, message);
-            sd[i] = UserOpMultiSigVerifier.SignerData({index: i + offset, signature: abi.encodePacked(r, s, v)});
+            sd[i] = UserOpMultiSigVerifier.SignerData({index: uint8(i + offset), signature: abi.encodePacked(r, s, v)});
         }
 
         return abi.encode(sd);

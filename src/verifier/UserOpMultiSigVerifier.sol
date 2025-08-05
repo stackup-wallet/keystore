@@ -10,6 +10,7 @@ import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 
 contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
     error ZeroThresholdNotAllowed();
+    error MaxOwnersLimitExceeded();
 
     bytes1 public constant SIGNATURES_ONLY_TAG = 0xff;
 
@@ -47,6 +48,7 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
     {
         (uint8 threshold, address[] memory owners) = abi.decode(config, (uint8, address[]));
         require(threshold > 0, ZeroThresholdNotAllowed());
+        require(owners.length <= type(uint8).max, MaxOwnersLimitExceeded());
 
         SignerData[] memory signatures;
         if (bytes1(data[0]) == SIGNATURES_ONLY_TAG) {
