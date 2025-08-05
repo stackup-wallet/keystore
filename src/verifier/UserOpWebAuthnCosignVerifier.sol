@@ -25,7 +25,7 @@ contract UserOpWebAuthnCosignVerifier is IVerifier, OnlyKeystore {
      * @notice Called by the Keystore for nodes with dual WebAuthn and ECDSA
      * verification.
      * @dev This function will revert if the ECDSA cosigner signature is invalid.
-     * During simulation, it is therefor important to ensure the cosigner dummy
+     * During simulation, it is therefore important to ensure the cosigner dummy
      * signature used is structurally valid.
      * @param message The hashed message that must be signed by both the ECDSA
      * cosigner and the WebAuthn authenticator.

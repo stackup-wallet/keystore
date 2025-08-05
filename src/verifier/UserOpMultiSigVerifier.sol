@@ -23,7 +23,7 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
     /**
      * @notice Called by the Keystore for nodes with multisig ECDSA verification.
      * @dev This function will revert if any of the ECDSA signatures are invalid.
-     * During simulation, it is therefor important to ensure all dummy signatures
+     * During simulation, it is therefore important to ensure all dummy signatures
      * used are structurally valid.
      * @param message The hashed message that must be signed by the owners.
      * @param data The calldata containing the signatures. If the first byte is
