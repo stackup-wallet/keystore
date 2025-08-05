@@ -157,9 +157,15 @@ contract UserOpMultiSigVerifierTest is Test {
         returns (bytes memory)
     {
         UserOpMultiSigVerifier.SignerData[] memory sd = new UserOpMultiSigVerifier.SignerData[](threshold);
-        for (uint16 i = 0; i < threshold; i++) {
-            (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[i + offset].pk, message);
-            sd[i] = UserOpMultiSigVerifier.SignerData({index: uint8(i + offset), signature: abi.encodePacked(r, s, v)});
+        for (uint8 i = 0; i < threshold; i++) {
+            uint16 index = uint16(i) + offset;
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[index].pk, message);
+            sd[i] = UserOpMultiSigVerifier.SignerData({
+                // Note: index will overflow back to 0 after max uint8.
+                // This is ok since a MaxOwnersLimitExceeded() error is expected.
+                index: uint8(index),
+                signature: abi.encodePacked(r, s, v)
+            });
         }
 
         return abi.encode(sd);
