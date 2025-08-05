@@ -13,6 +13,9 @@ contract UserOpECDSAVerifier is IVerifier, OnlyKeystore {
 
     /**
      * @notice Called by the Keystore for nodes with ECDSA verification.
+     * @dev This function will revert if the ECDSA signature is invalid. During
+     * simulation, it is therefor important to ensure the dummy signature used is
+     * structurally valid.
      * @param message The hashed message that was signed.
      * @param data The raw signature or a PackedUserOperation containing the signature.
      * If the length is more than 65 bytes, it will be decoded as a PackedUserOperation
