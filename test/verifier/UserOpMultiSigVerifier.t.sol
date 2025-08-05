@@ -102,6 +102,37 @@ contract UserOpMultiSigVerifierTest is Test {
         verifier.validateData(message, data, config);
     }
 
+    function testFuzz_validateDataDuplicateSignatures(bool withUserOp, uint8 threshold, uint8 dup) public {
+        // Note: set threshold > 1 to show we can't recycle the same signature
+        // multiple times.
+        vm.assume(threshold > 1);
+        vm.assume(dup >= 1);
+
+        Signer[] memory signers = _createSigners(1);
+        bytes32 message = keccak256("Signed by signer");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[0].pk, message);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        UserOpMultiSigVerifier.SignerData[] memory sd = new UserOpMultiSigVerifier.SignerData[](dup);
+        for (uint8 i = 0; i < dup; i++) {
+            sd[i] = UserOpMultiSigVerifier.SignerData({index: 0, signature: signature});
+        }
+
+        bytes memory data = abi.encode(sd);
+        if (withUserOp) {
+            PackedUserOperation memory userOp;
+            userOp.signature = data;
+            data = abi.encode(userOp);
+        } else {
+            data = abi.encodePacked(verifier.SIGNATURES_ONLY_TAG(), data);
+        }
+
+        bytes memory config = _createConfig(threshold, signers);
+
+        uint256 validationData = verifier.validateData(message, data, config);
+        assertEq(validationData, SIG_VALIDATION_FAILED);
+    }
+
     function testFuzz_validateDataMaxSignatures(bool withUserOp, uint8 excess) public {
         vm.assume(excess > 0);
 
