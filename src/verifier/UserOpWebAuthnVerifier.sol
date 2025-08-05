@@ -17,6 +17,20 @@ import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 contract UserOpWebAuthnVerifier is IVerifier, OnlyKeystore {
     constructor(address aKeystore) OnlyKeystore(aKeystore) {}
 
+    /**
+     * @notice Called by the Keystore for nodes with WebAuthn verification.
+     * @param message The hashed message that must be signed by the WebAuthn
+     * authenticator.
+     * @param data The calldata containing the WebAuthn authentication data. If
+     * the data is not a valid WebAuthnAuth struct, it is assumed to be a PackedUserOperation
+     * whose signature field contains the WebAuthnAuth encoded bytes.
+     * See https://github.com/Vectorized/solady/blob/v0.1.19/src/utils/WebAuthn.sol
+     * for details on how WebAuthnAuth is encoded.
+     * @param config The node configuration, expected to be abi.encoded as
+     * (bytes32 x, bytes32 y), where x and y are the WebAuthn public key coordinates.
+     * @return validationData Returns SIG_VALIDATION_SUCCESS (0) if ok, otherwise
+     * SIG_VALIDATION_FAILED (1).
+     */
     function validateData(bytes32 message, bytes calldata data, bytes calldata config)
         external
         view

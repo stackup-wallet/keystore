@@ -18,6 +18,21 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
 
     constructor(address aKeystore) OnlyKeystore(aKeystore) {}
 
+    /**
+     * @notice Called by the Keystore for nodes with multisig ECDSA verification.
+     * @param message The hashed message that must be signed by the owners.
+     * @param data The calldata containing the signatures. If the first byte is
+     * SIGNATURES_ONLY_TAG (0xff), it is followed by an abi-encoded array of SignerData
+     * structs. Otherwise, it is a PackedUserOperation whose signature field contains
+     * the abi-encoded array of SignerData.
+     * @param config The node configuration, expected to be abi.encoded as
+     * (uint8 threshold, address[] owners).
+     * The threshold is the minimum number of owner signatures required to pass
+     * validation.
+     * The owners array is all the valid signers on the multisig.
+     * @return validationData Returns SIG_VALIDATION_SUCCESS (0) if ok, otherwise
+     * SIG_VALIDATION_FAILED (1).
+     */
     function validateData(bytes32 message, bytes calldata data, bytes calldata config)
         external
         view
