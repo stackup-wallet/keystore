@@ -102,6 +102,39 @@ contract UserOpMultiSigVerifierTest is Test {
         verifier.validateData(message, data, config);
     }
 
+    function testFuzz_validateDataMaxSignatures(bool withUserOp, uint8 excess) public {
+        vm.assume(excess > 0);
+
+        Signer[] memory signers = _createSigners(1);
+        bytes32 message = keccak256("Signed by signer");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[0].pk, message);
+
+        uint16 count = uint16(type(uint8).max) + excess;
+        UserOpMultiSigVerifier.SignerData[] memory sd = new UserOpMultiSigVerifier.SignerData[](count);
+        for (uint16 i = 0; i < count; i++) {
+            sd[i] = UserOpMultiSigVerifier.SignerData({
+                // Note: index will overflow back to 0 after max uint8.
+                // This is ok since a MaxSignaturesExceeded() error is expected.
+                index: 0,
+                signature: abi.encodePacked(r, s, v)
+            });
+        }
+
+        bytes memory data = abi.encode(sd);
+        if (withUserOp) {
+            PackedUserOperation memory userOp;
+            userOp.signature = data;
+            data = abi.encode(userOp);
+        } else {
+            data = abi.encodePacked(verifier.SIGNATURES_ONLY_TAG(), data);
+        }
+
+        bytes memory config = _createConfig(1, signers);
+
+        vm.expectRevert(UserOpMultiSigVerifier.MaxSignaturesExceeded.selector);
+        verifier.validateData(message, data, config);
+    }
+
     function testFuzz_validateDataInvalidCaller(address keystore) public {
         vm.assume(keystore != address(this));
         vm.prank(keystore);
