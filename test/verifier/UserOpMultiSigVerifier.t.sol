@@ -82,7 +82,7 @@ contract UserOpMultiSigVerifierTest is Test {
         verifier.validateData(message, data, config);
     }
 
-    function testFuzz_validateDataNoOwners(bool withUserOp, uint8 threshold, uint8 size) public {
+    function testFuzz_validateDataMinOwners(bool withUserOp, uint8 threshold, uint8 size) public {
         vm.assume(threshold > 0 && size < threshold);
         Signer[] memory signers = _createSigners(size);
 
