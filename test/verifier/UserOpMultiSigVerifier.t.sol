@@ -82,6 +82,26 @@ contract UserOpMultiSigVerifierTest is Test {
         verifier.validateData(message, data, config);
     }
 
+    function testFuzz_validateDataMinOwners(bool withUserOp, uint8 threshold, uint8 size) public {
+        vm.assume(threshold > 0 && size < threshold);
+        Signer[] memory signers = _createSigners(size);
+
+        bytes32 message = keccak256("Signed by signer");
+        bytes memory data = _createData(message, size, 0, signers);
+        if (withUserOp) {
+            PackedUserOperation memory userOp;
+            userOp.signature = data;
+            data = abi.encode(userOp);
+        } else {
+            data = abi.encodePacked(verifier.SIGNATURES_ONLY_TAG(), data);
+        }
+
+        bytes memory config = _createConfig(threshold, signers);
+
+        vm.expectRevert(UserOpMultiSigVerifier.InvalidNumberOfOwners.selector);
+        verifier.validateData(message, data, config);
+    }
+
     function testFuzz_validateDataMaxOwners(bool withUserOp, uint8 threshold, uint8 offset, uint8 excess) public {
         uint16 size = _getSizeAndAssumeMaxOwnerLimitExceeded(threshold, offset, excess);
         Signer[] memory signers = _createSigners(size);
@@ -98,7 +118,7 @@ contract UserOpMultiSigVerifierTest is Test {
 
         bytes memory config = _createConfig(threshold, signers);
 
-        vm.expectRevert(UserOpMultiSigVerifier.MaxOwnersLimitExceeded.selector);
+        vm.expectRevert(UserOpMultiSigVerifier.InvalidNumberOfOwners.selector);
         verifier.validateData(message, data, config);
     }
 
@@ -151,23 +171,26 @@ contract UserOpMultiSigVerifierTest is Test {
         verifier.validateData(message, data, config);
     }
 
-    function testFuzz_validateDataDuplicateSignatures(bool withUserOp, uint8 threshold, uint8 dup) public {
+    function testFuzz_validateDataDuplicateSignatures(
+        bool withUserOp,
+        uint8 threshold,
+        uint8 offset,
+        uint8 size,
+        uint8 dup
+    ) public {
         // Note: set threshold > 1 to show we can't recycle the same signature
         // multiple times.
-        vm.assume(threshold > 1);
-        vm.assume(dup >= 1);
+        vm.assume(threshold > 1 && dup > 1 && dup <= threshold);
+        _assume(threshold, offset, size);
+        Signer[] memory signers = _createSigners(size);
 
-        Signer[] memory signers = _createSigners(1);
         bytes32 message = keccak256("Signed by signer");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[0].pk, message);
-        bytes memory signature = abi.encodePacked(r, s, v);
-
-        UserOpMultiSigVerifier.SignerData[] memory sd = new UserOpMultiSigVerifier.SignerData[](dup);
-        for (uint8 i = 0; i < dup; i++) {
-            sd[i] = UserOpMultiSigVerifier.SignerData({index: 0, signature: signature});
+        bytes memory data = _createData(message, threshold, offset, signers);
+        UserOpMultiSigVerifier.SignerData[] memory sd = abi.decode(data, (UserOpMultiSigVerifier.SignerData[]));
+        for (uint8 i; i < dup; i++) {
+            sd[i] = sd[0];
         }
-
-        bytes memory data = abi.encode(sd);
+        data = abi.encode(sd);
         if (withUserOp) {
             PackedUserOperation memory userOp;
             userOp.signature = data;
@@ -287,7 +310,7 @@ contract UserOpMultiSigVerifierTest is Test {
             (uint8 v, bytes32 r, bytes32 s) = vm.sign(signers[index].pk, message);
             sd[i] = UserOpMultiSigVerifier.SignerData({
                 // Note: index will overflow back to 0 after max uint8.
-                // This is ok since a MaxOwnersLimitExceeded() error is expected.
+                // This is ok since an InvalidNumberOfOwners() error is expected.
                 index: uint8(index),
                 signature: abi.encodePacked(r, s, v)
             });

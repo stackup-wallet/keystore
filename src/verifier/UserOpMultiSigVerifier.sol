@@ -10,9 +10,9 @@ import {OnlyKeystore} from "../lib/OnlyKeystore.sol";
 
 contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
     error ZeroThresholdNotAllowed();
-    error MaxOwnersLimitExceeded();
-    error MaxSignaturesExceeded();
+    error InvalidNumberOfOwners();
     error OwnersUnsortedOrHasDuplicates();
+    error MaxSignaturesExceeded();
 
     bytes1 public constant SIGNATURES_ONLY_TAG = 0xff;
 
@@ -36,9 +36,10 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
      * @param config The node configuration, expected to be abi.encoded as
      * (uint8 threshold, address[] owners).
      * The threshold is the minimum number of owner signatures required to pass
-     * validation.
-     * The owners array is all the valid signers on the multisig. It MUST be sorted
-     * in ascending order for efficient duplicate detection.
+     * validation. It MUST be greater than 0.
+     * The owners array is all the valid signers on the multisig. It MUST be greater
+     * than or equal to the threshold AND be sorted in ascending order for efficient
+     * duplicate detection.
      * @return validationData Returns SIG_VALIDATION_SUCCESS (0) if ok, otherwise
      * SIG_VALIDATION_FAILED (1).
      */
@@ -51,7 +52,7 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
     {
         (uint8 threshold, address[] memory owners) = abi.decode(config, (uint8, address[]));
         require(threshold > 0, ZeroThresholdNotAllowed());
-        require(owners.length <= type(uint8).max, MaxOwnersLimitExceeded());
+        require(owners.length >= threshold && owners.length <= type(uint8).max, InvalidNumberOfOwners());
         _requireSortedAndUnique(owners);
 
         SignerData[] memory signatures;
@@ -89,7 +90,6 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
      */
     function _requireSortedAndUnique(address[] memory owners) internal pure {
         uint256 length = owners.length;
-        if (length == 0) return;
         for (uint256 i = 1; i < length; i++) {
             require(owners[i] > owners[i - 1], OwnersUnsortedOrHasDuplicates());
         }
