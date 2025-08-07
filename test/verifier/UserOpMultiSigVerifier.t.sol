@@ -253,7 +253,7 @@ contract UserOpMultiSigVerifierTest is Test {
             (address addr, uint256 pk) = makeAddrAndKey(LibString.toString(i));
             signers[i] = Signer({addr: addr, pk: pk});
         }
-        _quickSortSigners(signers);
+        _quickSortSigners(signers, true);
         return signers;
     }
 
@@ -263,7 +263,7 @@ contract UserOpMultiSigVerifierTest is Test {
             (address addr, uint256 pk) = makeAddrAndKey(LibString.toString(i));
             signers[i] = Signer({addr: addr, pk: pk});
         }
-        _quickSortSignersReverse(signers);
+        _quickSortSigners(signers, false);
         return signers;
     }
 
@@ -296,13 +296,13 @@ contract UserOpMultiSigVerifierTest is Test {
         return abi.encode(sd);
     }
 
-    function _quickSortSigners(Signer[] memory arr) internal pure {
+    function _quickSortSigners(Signer[] memory arr, bool asc) internal pure {
         if (arr.length > 1) {
-            _quickSortSigners(arr, 0, int256(arr.length) - 1);
+            _quickSortSigners(arr, asc, 0, int256(arr.length) - 1);
         }
     }
 
-    function _quickSortSigners(Signer[] memory arr, int256 left, int256 right) private pure {
+    function _quickSortSigners(Signer[] memory arr, bool asc, int256 left, int256 right) private pure {
         if (left >= right) return;
 
         Signer memory pivot = arr[uint256(left + (right - left) / 2)];
@@ -310,8 +310,13 @@ contract UserOpMultiSigVerifierTest is Test {
         int256 j = right;
 
         while (i <= j) {
-            while (arr[uint256(i)].addr < pivot.addr) i++;
-            while (arr[uint256(j)].addr > pivot.addr) j--;
+            if (asc) {
+                while (arr[uint256(i)].addr < pivot.addr) i++;
+                while (arr[uint256(j)].addr > pivot.addr) j--;
+            } else {
+                while (arr[uint256(i)].addr > pivot.addr) i++;
+                while (arr[uint256(j)].addr < pivot.addr) j--;
+            }
 
             if (i <= j) {
                 (arr[uint256(i)], arr[uint256(j)]) = (arr[uint256(j)], arr[uint256(i)]);
@@ -320,35 +325,7 @@ contract UserOpMultiSigVerifierTest is Test {
             }
         }
 
-        if (left < j) _quickSortSigners(arr, left, j);
-        if (i < right) _quickSortSigners(arr, i, right);
-    }
-
-    function _quickSortSignersReverse(Signer[] memory arr) internal pure {
-        if (arr.length > 1) {
-            _quickSortSignersReverse(arr, 0, int256(arr.length) - 1);
-        }
-    }
-
-    function _quickSortSignersReverse(Signer[] memory arr, int256 left, int256 right) private pure {
-        if (left >= right) return;
-
-        Signer memory pivot = arr[uint256(left + (right - left) / 2)];
-        int256 i = left;
-        int256 j = right;
-
-        while (i <= j) {
-            while (arr[uint256(i)].addr > pivot.addr) i++;
-            while (arr[uint256(j)].addr < pivot.addr) j--;
-
-            if (i <= j) {
-                (arr[uint256(i)], arr[uint256(j)]) = (arr[uint256(j)], arr[uint256(i)]);
-                i++;
-                j--;
-            }
-        }
-
-        if (left < j) _quickSortSignersReverse(arr, left, j);
-        if (i < right) _quickSortSignersReverse(arr, i, right);
+        if (left < j) _quickSortSigners(arr, asc, left, j);
+        if (i < right) _quickSortSigners(arr, asc, i, right);
     }
 }
