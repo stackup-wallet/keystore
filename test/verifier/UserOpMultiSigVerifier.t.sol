@@ -102,6 +102,55 @@ contract UserOpMultiSigVerifierTest is Test {
         verifier.validateData(message, data, config);
     }
 
+    function testFuzz_validateDataIncorrectlySortedOwners(bool withUserOp, uint8 threshold, uint8 offset, uint8 size)
+        public
+    {
+        vm.assume(size > 1);
+        _assume(threshold, offset, size);
+        Signer[] memory signers = _createSignersReverse(size);
+
+        bytes32 message = keccak256("Signed by signer");
+        bytes memory data = _createData(message, threshold, offset, signers);
+        if (withUserOp) {
+            PackedUserOperation memory userOp;
+            userOp.signature = data;
+            data = abi.encode(userOp);
+        } else {
+            data = abi.encodePacked(verifier.SIGNATURES_ONLY_TAG(), data);
+        }
+
+        bytes memory config = _createConfig(threshold, signers);
+
+        vm.expectRevert(UserOpMultiSigVerifier.OwnersUnsortedOrHasDuplicates.selector);
+        verifier.validateData(message, data, config);
+    }
+
+    function testFuzz_validateDataDuplicateOwners(bool withUserOp, uint8 threshold, uint8 offset, uint8 size) public {
+        vm.assume(threshold > 1);
+        _assume(threshold, offset, size);
+
+        (address addr, uint256 pk) = makeAddrAndKey("duplicate");
+        Signer[] memory signers = new Signer[](size);
+        for (uint8 i = 0; i < size; i++) {
+            signers[i] = Signer({addr: addr, pk: pk});
+        }
+
+        bytes32 message = keccak256("Signed by signer");
+        bytes memory data = _createData(message, threshold, offset, signers);
+        if (withUserOp) {
+            PackedUserOperation memory userOp;
+            userOp.signature = data;
+            data = abi.encode(userOp);
+        } else {
+            data = abi.encodePacked(verifier.SIGNATURES_ONLY_TAG(), data);
+        }
+
+        bytes memory config = _createConfig(threshold, signers);
+
+        vm.expectRevert(UserOpMultiSigVerifier.OwnersUnsortedOrHasDuplicates.selector);
+        verifier.validateData(message, data, config);
+    }
+
     function testFuzz_validateDataDuplicateSignatures(bool withUserOp, uint8 threshold, uint8 dup) public {
         // Note: set threshold > 1 to show we can't recycle the same signature
         // multiple times.
@@ -204,6 +253,17 @@ contract UserOpMultiSigVerifierTest is Test {
             (address addr, uint256 pk) = makeAddrAndKey(LibString.toString(i));
             signers[i] = Signer({addr: addr, pk: pk});
         }
+        _quickSortSigners(signers, true);
+        return signers;
+    }
+
+    function _createSignersReverse(uint16 size) internal returns (Signer[] memory) {
+        Signer[] memory signers = new Signer[](size);
+        for (uint16 i = 0; i < size; i++) {
+            (address addr, uint256 pk) = makeAddrAndKey(LibString.toString(i));
+            signers[i] = Signer({addr: addr, pk: pk});
+        }
+        _quickSortSigners(signers, false);
         return signers;
     }
 
@@ -234,5 +294,38 @@ contract UserOpMultiSigVerifierTest is Test {
         }
 
         return abi.encode(sd);
+    }
+
+    function _quickSortSigners(Signer[] memory arr, bool asc) internal pure {
+        if (arr.length > 1) {
+            _quickSortSigners(arr, asc, 0, int256(arr.length) - 1);
+        }
+    }
+
+    function _quickSortSigners(Signer[] memory arr, bool asc, int256 left, int256 right) private pure {
+        if (left >= right) return;
+
+        Signer memory pivot = arr[uint256(left + (right - left) / 2)];
+        int256 i = left;
+        int256 j = right;
+
+        while (i <= j) {
+            if (asc) {
+                while (arr[uint256(i)].addr < pivot.addr) i++;
+                while (arr[uint256(j)].addr > pivot.addr) j--;
+            } else {
+                while (arr[uint256(i)].addr > pivot.addr) i++;
+                while (arr[uint256(j)].addr < pivot.addr) j--;
+            }
+
+            if (i <= j) {
+                (arr[uint256(i)], arr[uint256(j)]) = (arr[uint256(j)], arr[uint256(i)]);
+                i++;
+                j--;
+            }
+        }
+
+        if (left < j) _quickSortSigners(arr, asc, left, j);
+        if (i < right) _quickSortSigners(arr, asc, i, right);
     }
 }
