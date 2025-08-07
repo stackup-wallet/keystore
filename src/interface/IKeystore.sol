@@ -18,7 +18,7 @@ interface IKeystore {
     function validate(ValidateAction calldata action) external view returns (uint256 validationData);
 
     function registerNode(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external;
-    function getRegisteredNode(bytes32 refHash, address account, bytes calldata node)
+    function getRegisteredNode(bytes32 refHash, address account, bytes32 nodeHash)
         external
         view
         returns (bytes memory);

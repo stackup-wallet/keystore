@@ -10,18 +10,21 @@ import {IVerifier} from "../interface/IVerifier.sol";
 import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 
 contract Keystore is IKeystore {
-    mapping(bytes32 => mapping(address => bytes32)) internal _rootHash;
-    mapping(bytes32 => mapping(uint192 => mapping(address => uint64))) internal _nonceSequence;
-    mapping(bytes32 => mapping(bytes32 => mapping(address => bytes))) internal _nodeCache;
+    uint256 constant NODE_VERIFIER_LENGTH = 20;
+
+    mapping(bytes32 refHash => mapping(address account => bytes32 rootHash)) internal _rootHash;
+    mapping(bytes32 refHash => mapping(uint192 key => mapping(address account => uint64 seq))) internal _nonceSequence;
+    mapping(bytes32 rootHash => mapping(bytes32 nodeHash => mapping(address account => bytes node))) internal _nodeCache;
 
     function handleUpdates(UpdateAction[] calldata actions) external {
-        for (uint256 i = 0; i < actions.length; i++) {
+        uint256 length = actions.length;
+        for (uint256 i = 0; i < length; i++) {
             UpdateAction calldata action = actions[i];
             (uint192 nonceKey, uint64 nonceSeq) = _unpackNonceKey(action.nonce);
             uint64 currSeq = _validateAndGetNonce(action.refHash, action.account, nonceKey, nonceSeq);
 
             (bytes32 nodeHash, bytes memory node) =
-                _validateNode(action.refHash, action.account, action.proof, action.node);
+                _fetchOrValidateNode(action.refHash, action.account, action.proof, action.node);
             (address verifier, bytes memory config) = _unpackNode(node);
             bytes32 message =
                 keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash));
@@ -40,29 +43,29 @@ contract Keystore is IKeystore {
     }
 
     function validate(ValidateAction calldata action) external view returns (uint256 validationData) {
-        (, bytes memory node) = _validateNode(action.refHash, msg.sender, action.proof, action.node);
+        (, bytes memory node) = _fetchOrValidateNode(action.refHash, msg.sender, action.proof, action.node);
 
         (address verifier, bytes memory config) = _unpackNode(node);
         return IVerifier(verifier).validateData(action.message, action.data, config);
     }
 
     function registerNode(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external {
-        require(node.length >= 20, InvalidNode());
-        require(address(bytes20(LibBytes.slice(node, 0, 20))) != address(0), InvalidVerifier());
+        require(node.length >= NODE_VERIFIER_LENGTH, InvalidNode());
+        require(address(bytes20(node[0:NODE_VERIFIER_LENGTH])) != address(0), InvalidVerifier());
 
         bytes32 rootHash = _getCurrentRootHash(refHash, msg.sender);
         bytes32 nodeHash = keccak256(node);
-        require(MerkleProofLib.verify(proof, rootHash, nodeHash), InvalidProof());
+        require(MerkleProofLib.verifyCalldata(proof, rootHash, nodeHash), InvalidProof());
 
         _nodeCache[rootHash][nodeHash][msg.sender] = node;
     }
 
-    function getRegisteredNode(bytes32 refHash, address account, bytes calldata node)
+    function getRegisteredNode(bytes32 refHash, address account, bytes32 nodeHash)
         external
         view
         returns (bytes memory)
     {
-        return _nodeCache[_getCurrentRootHash(refHash, account)][keccak256(node)][account];
+        return _nodeCache[_getCurrentRootHash(refHash, account)][nodeHash][account];
     }
 
     function getRootHash(bytes32 refHash, address account) external view returns (bytes32 rootHash) {
@@ -101,24 +104,24 @@ contract Keystore is IKeystore {
     }
 
     function _unpackNode(bytes memory node) internal pure returns (address verifier, bytes memory config) {
-        if (node.length < 20) revert InvalidNode();
-        else if (node.length > 20) config = LibBytes.slice(node, 20, node.length);
+        if (node.length < NODE_VERIFIER_LENGTH) revert InvalidNode();
 
-        verifier = address(bytes20(LibBytes.slice(node, 0, 20)));
+        verifier = address(bytes20(LibBytes.slice(node, 0, NODE_VERIFIER_LENGTH)));
+        config = LibBytes.slice(node, NODE_VERIFIER_LENGTH, node.length);
         if (verifier == address(0)) {
             revert InvalidVerifier();
         }
     }
 
-    function _validateNode(bytes32 refHash, address account, bytes calldata aProof, bytes calldata aNode)
+    function _fetchOrValidateNode(bytes32 refHash, address account, bytes calldata aProof, bytes calldata aNode)
         internal
         view
         returns (bytes32 nodeHash, bytes memory node)
     {
         if (aProof.length == 0) {
-            nodeHash = bytes32(aNode);
+            nodeHash = bytes32(aNode); // convert from bytes to bytes32
             node = _nodeCache[_getCurrentRootHash(refHash, account)][nodeHash][account];
-            require(node.length >= 20, UnregisteredProof());
+            require(node.length >= NODE_VERIFIER_LENGTH, UnregisteredProof());
         } else {
             nodeHash = keccak256(aNode);
             node = aNode;
