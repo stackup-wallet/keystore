@@ -12,6 +12,7 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
     error ZeroThresholdNotAllowed();
     error MaxOwnersLimitExceeded();
     error MaxSignaturesExceeded();
+    error OwnersUnsortedOrHasDuplicates();
 
     bytes1 public constant SIGNATURES_ONLY_TAG = 0xff;
 
@@ -36,7 +37,8 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
      * (uint8 threshold, address[] owners).
      * The threshold is the minimum number of owner signatures required to pass
      * validation.
-     * The owners array is all the valid signers on the multisig.
+     * The owners array is all the valid signers on the multisig. It MUST be sorted
+     * in ascending order for efficient duplicate detection.
      * @return validationData Returns SIG_VALIDATION_SUCCESS (0) if ok, otherwise
      * SIG_VALIDATION_FAILED (1).
      */
@@ -50,6 +52,7 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
         (uint8 threshold, address[] memory owners) = abi.decode(config, (uint8, address[]));
         require(threshold > 0, ZeroThresholdNotAllowed());
         require(owners.length <= type(uint8).max, MaxOwnersLimitExceeded());
+        _requireSortedAndUnique(owners);
 
         SignerData[] memory signatures;
         if (bytes1(data[0]) == SIGNATURES_ONLY_TAG) {
@@ -73,5 +76,22 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
         }
 
         return valid >= threshold ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED;
+    }
+
+    // ================================================================
+    // Helper functions
+    // ================================================================
+
+    /**
+     * @dev Checks that a sorted owners array is strictly unique (no duplicates).
+     * In practice, the upper bound for this function is limited by the maximum
+     * number of owners. This is enforced elsewhere to be max uint8 (i.e. 255).
+     */
+    function _requireSortedAndUnique(address[] memory owners) internal pure {
+        uint256 length = owners.length;
+        if (length == 0) return;
+        for (uint256 i = 1; i < length; i++) {
+            require(owners[i] > owners[i - 1], OwnersUnsortedOrHasDuplicates());
+        }
     }
 }
