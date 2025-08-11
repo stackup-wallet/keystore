@@ -3,12 +3,16 @@ pragma solidity ^0.8.28;
 
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 import {ISenderCreator} from "account-abstraction/interfaces/ISenderCreator.sol";
-import {Create2} from "@openzeppelin/contracts/utils/Create2.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {LibClone} from "solady/utils/LibClone.sol";
 
 import {IKeystore} from "../interface/IKeystore.sol";
 import {KeystoreAccount} from "./KeystoreAccount.sol";
 
+/**
+ * @dev This factory uses ERC-1167 minimal proxies to deploy each instance of a
+ * KeystoreAccount. For maximum simplicity, the KeystoreAccount does NOT have a
+ * built-in path for upgradability.
+ */
 contract KeystoreAccountFactory {
     error NotFromSenderCreator();
 
@@ -34,24 +38,15 @@ contract KeystoreAccountFactory {
         if (codeSize > 0) {
             return KeystoreAccount(payable(addr));
         }
-        ret = KeystoreAccount(
-            payable(
-                new ERC1967Proxy{salt: bytes32(salt)}(
-                    address(accountImplementation), abi.encodeCall(KeystoreAccount.initialize, (refHash))
-                )
-            )
-        );
+        address deployed =
+            LibClone.cloneDeterministic(address(accountImplementation), keccak256(abi.encode(refHash, salt)));
+        ret = KeystoreAccount(payable(deployed));
+        ret.initialize(refHash);
     }
 
     function getAddress(bytes32 refHash, uint256 salt) public view returns (address) {
-        return Create2.computeAddress(
-            bytes32(salt),
-            keccak256(
-                abi.encodePacked(
-                    type(ERC1967Proxy).creationCode,
-                    abi.encode(address(accountImplementation), abi.encodeCall(KeystoreAccount.initialize, (refHash)))
-                )
-            )
+        return LibClone.predictDeterministicAddress(
+            address(accountImplementation), keccak256(abi.encode(refHash, salt)), address(this)
         );
     }
 
