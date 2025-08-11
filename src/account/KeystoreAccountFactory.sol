@@ -38,9 +38,9 @@ contract KeystoreAccountFactory {
         if (codeSize > 0) {
             return KeystoreAccount(payable(addr));
         }
-        address deployed =
-            LibClone.cloneDeterministic(address(accountImplementation), keccak256(abi.encode(refHash, salt)));
-        ret = KeystoreAccount(payable(deployed));
+        ret = KeystoreAccount(
+            payable(LibClone.cloneDeterministic(address(accountImplementation), keccak256(abi.encode(refHash, salt))))
+        );
         ret.initialize(refHash);
     }
 
