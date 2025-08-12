@@ -26,8 +26,11 @@ contract Keystore is IKeystore {
             (bytes32 nodeHash, bytes memory node) =
                 _fetchOrValidateNode(action.refHash, action.account, action.proof, action.node);
             (address verifier, bytes memory config) = _unpackNode(node);
-            bytes32 message =
-                keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash));
+            bytes32 message = action.useChainId
+                ? keccak256(
+                    abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash, block.chainid)
+                )
+                : keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash));
             if (IVerifier(verifier).validateData(message, action.data, config) == SIG_VALIDATION_FAILED) {
                 emit RootHashUpdated(
                     action.refHash, action.nextHash, action.nonce, action.proof, node, action.data, false
