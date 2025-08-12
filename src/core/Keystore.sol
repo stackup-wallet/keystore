@@ -16,6 +16,20 @@ contract Keystore is IKeystore {
     mapping(bytes32 refHash => mapping(uint192 key => mapping(address account => uint64 seq))) internal _nonceSequence;
     mapping(bytes32 rootHash => mapping(bytes32 nodeHash => mapping(address account => bytes node))) internal _nodeCache;
 
+    /**
+     * @dev This function can revert if at least one UpdateAction in the batch encounters
+     * any of the following errors:
+     *   - InvalidNonce()
+     *   - UnregisteredProof()
+     *   - InvalidProof()
+     *   - InvalidNode()
+     *   - InvalidVerifier()
+     *   - Verifier call revert
+     * If a verifier call returns with SIG_VALIDATION_FAILED (1) this will NOT revert
+     * but instead emit RootHashUpdated(..., success=false).
+     * Relaying entities SHOULD run sufficient checks and simulations on their batch
+     * before submitting onchain to prevent transaction reverts.
+     */
     function handleUpdates(UpdateAction[] calldata actions) external {
         uint256 length = actions.length;
         for (uint256 i = 0; i < length; i++) {
