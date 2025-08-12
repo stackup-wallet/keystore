@@ -312,6 +312,21 @@ Assuming the `Keystore` contract is audited and verified to be safe, there are s
 
 Because the `Verifier` is not required to store configuration, it must trust the given config from a `validateData` call. If this config comes from the `Keystore` then it can be trusted given its validity has been cryptographically guaranteed by the Merkle tree proof. Therefore, a `Verifier` should only be called by the `Keystore` and calling the `Verifier` directly (e.g. via the account) should be avoided.
 
+### Signature replayability on the `Verifier`
+
+`Verifier` contracts in this specification are intentionally stateless. The
+`validateData` call only attests that the provided
+signature (i.e. `data` input) correspond to the given `message` under the provided `config`.
+They do not track or consume nonces. As a result, signature replayability is a
+property of the upstream protocol that constructs the
+`message`, not of the `Verifier` itself. Common examples of this are detailed below.
+
+- **Update flow (`handleUpdates` call)**: Replay is prevented by the
+  `Keystore` via a 2D nonce packed into `UpdateAction.nonce`. Cross chain replay can also be prevented by binding the signed message to the `chainId` with the `action.useChainId` flag. The `Verifier` does not need to add additional nonce checks here.
+- **Validation flow (`validate` call)**: The `Keystore` forwards an arbitrary `message` chosen by the caller (typically the account). The `Verifier` only checks signature validity over that `message` and returns success or failure. Whether a valid signature can be replayed depends on how the `message` was formed.
+  - **ERC-4337 accounts**: The `message` SHOULD be the `userOpHash` which considers the `UserOperation` nonce. Replay protection is therefore provided by the ERC-4337 protocol. Submitting the same signed `userOpHash` again will fail due to the consumed account nonce.
+  - **ERC-1271 / off-chain signatures**: If the `message` does not include a nonce, timestamp window, session identifier, or other anti-replay material that is enforced by the upstream protocol or application, then a valid signature over the same `message` will be replayable by design.
+
 ### Handling the Merkle tree data structure
 
 The Merkle tree itself is not considered a secret value. If it was publicly exposed, then the privacy properties would become nullified since it would be possible to track associated recovery signers and verification schemes of the account. For operational security, it would be best practice to consider the account's Merkle tree as sensitive.
