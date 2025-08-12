@@ -371,7 +371,7 @@ contract KeystoreTest is Test {
         assertEq(keystore.getRootHash(inputs.refHash, address(this)), inputs.refHash);
     }
 
-    function testFuzz_handleUpdatesBatch(bool[2] calldata status) public {
+    function testFuzz_handleUpdatesBatch(bool[2] calldata status, bool useChainId) public {
         UpdateAction[] memory actions = new UpdateAction[](2);
 
         bytes32[] memory proof0 = new bytes32[](4);
@@ -383,6 +383,7 @@ contract KeystoreTest is Test {
             refHash: 0x0bea790c2d4a69970ebd6e09562a71084e5c78fef4d37528dd332cfb538542ce,
             nextHash: 0x307e09be09995e6faec1ee7e926814704ea5350149e0c43d3c33d08107993edd,
             nonce: 21345602813603236902997277615363180973908434092032,
+            useChainId: useChainId,
             account: address(this),
             proof: abi.encode(proof0),
             node: hex"367bbe350864b020ff1b8b7e418a815c2a947f9d09eadce97d0c9c596ac47be1bcc4e0bf1582b3fb3cb5ea2acb22f8c2bc170f7479c2",
@@ -399,6 +400,7 @@ contract KeystoreTest is Test {
             refHash: 0x919c2e64fdfe95a09781da7a31cec323904edeece2aadab9db2809401f24feb1,
             nextHash: 0xf5856318a232ea9e7991756d7ed9f32e6128c84bfefee127f06bc23fd22c0296,
             nonce: 779254045811195516568393371847926550426994733077148739871778103143432192,
+            useChainId: useChainId,
             account: address(this),
             proof: abi.encode(proof1),
             node: hex"217c31512a2fc94b172b5ef447d1deca0abf0c34a47ae671572752b2eafbb25ce40f59229f25811cfae1c253226d6b08cbecfd13e8b413cdbe616886c94b",
@@ -406,22 +408,44 @@ contract KeystoreTest is Test {
         });
 
         _mockVerifier(
-            keccak256(
-                abi.encode(
-                    actions[0].refHash, actions[0].nextHash, address(this), actions[0].nonce, keccak256(actions[0].node)
+            useChainId
+                ? keccak256(
+                    abi.encode(
+                        actions[0].refHash,
+                        actions[0].nextHash,
+                        address(this),
+                        actions[0].nonce,
+                        keccak256(actions[0].node),
+                        block.chainid
+                    )
                 )
-            ),
+                : keccak256(
+                    abi.encode(
+                        actions[0].refHash, actions[0].nextHash, address(this), actions[0].nonce, keccak256(actions[0].node)
+                    )
+                ),
             actions[0].node,
             actions[0].data,
             status[0] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED
         );
 
         _mockVerifier(
-            keccak256(
-                abi.encode(
-                    actions[1].refHash, actions[1].nextHash, address(this), actions[1].nonce, keccak256(actions[1].node)
+            useChainId
+                ? keccak256(
+                    abi.encode(
+                        actions[1].refHash,
+                        actions[1].nextHash,
+                        address(this),
+                        actions[1].nonce,
+                        keccak256(actions[1].node),
+                        block.chainid
+                    )
                 )
-            ),
+                : keccak256(
+                    abi.encode(
+                        actions[1].refHash, actions[1].nextHash, address(this), actions[1].nonce, keccak256(actions[1].node)
+                    )
+                ),
             actions[1].node,
             actions[1].data,
             status[1] ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED
@@ -562,6 +586,7 @@ contract KeystoreTest is Test {
             refHash: refHash,
             nextHash: nextHash,
             nonce: nonce,
+            useChainId: false,
             account: address(this),
             proof: proof,
             node: node,

@@ -144,6 +144,7 @@ contract Keystore32NodeUCMT is Test {
             refHash: 0x919c2e64fdfe95a09781da7a31cec323904edeece2aadab9db2809401f24feb1,
             nextHash: 0xf5856318a232ea9e7991756d7ed9f32e6128c84bfefee127f06bc23fd22c0296,
             nonce: 779254045811195516568393371847926550426994733077148739871778103143432192,
+            useChainId: false,
             account: address(this),
             proof: proof,
             node: hex"217c31512a2fc94b172b5ef447d1deca0abf0c34a47ae671572752b2eafbb25ce40f59229f25811cfae1c253226d6b08cbecfd13e8b413cdbe616886c94b",
