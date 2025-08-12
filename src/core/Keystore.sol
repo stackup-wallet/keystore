@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {SIG_VALIDATION_FAILED} from "account-abstraction/core/Helpers.sol";
 import {LibBytes} from "solady/utils/LibBytes.sol";
 import {MerkleProofLib} from "solady/utils/MerkleProofLib.sol";
@@ -9,7 +10,7 @@ import {IKeystore} from "../interface/IKeystore.sol";
 import {IVerifier} from "../interface/IVerifier.sol";
 import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 
-contract Keystore is IKeystore {
+contract Keystore is IKeystore, ReentrancyGuardTransient {
     uint256 constant NODE_VERIFIER_LENGTH = 20;
 
     mapping(bytes32 refHash => mapping(address account => bytes32 rootHash)) internal _rootHash;
@@ -30,7 +31,7 @@ contract Keystore is IKeystore {
      * Relaying entities SHOULD run sufficient checks and simulations on their batch
      * before submitting onchain to prevent transaction reverts.
      */
-    function handleUpdates(UpdateAction[] calldata actions) external {
+    function handleUpdates(UpdateAction[] calldata actions) external nonReentrant {
         uint256 length = actions.length;
         for (uint256 i = 0; i < length; i++) {
             UpdateAction calldata action = actions[i];
