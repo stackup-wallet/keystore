@@ -20,8 +20,8 @@ contract Keystore is IKeystore {
      * @dev This function can revert if at least one UpdateAction in the batch encounters
      * any of the following errors:
      *   - InvalidNonce()
-     *   - UnregisteredProof()
      *   - InvalidProof()
+     *   - UnregisteredProof()
      *   - InvalidNode()
      *   - InvalidVerifier()
      *   - Verifier call revert
