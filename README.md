@@ -25,6 +25,7 @@ Before being able to run any command, you need to create a .env file and set you
 
 ```shell
 $ forge install
+$ npm install
 ```
 
 ### Build
@@ -53,4 +54,16 @@ source .env && forge script script/DeployUserOpECDSAVerifier.s.sol --rpc-url $BA
 source .env && forge script script/DeployUserOpMultiSigVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
 source .env && forge script script/DeployUserOpWebAuthnVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
 source .env && forge script script/DeployUserOpWebAuthnCosignVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+```
+
+### Example scripts
+
+The following commands are useful for users and application developers to work with the Keystore protocol.
+
+#### Verify configuration
+
+A minimal script to generate and verify a UCMT with the [openzeppelin Merkle tree library](https://github.com/OpenZeppelin/merkle-tree).
+
+```shell
+$ npm run examples:verify-ucmt
 ```

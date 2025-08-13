@@ -1,0 +1,14 @@
+{
+  "name": "keystore",
+  "version": "1.0.0",
+  "scripts": {
+    "examples:verify-ucmt": "tsx ./examples/verify-ucmt.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.4"
+  },
+  "dependencies": {
+    "@openzeppelin/merkle-tree": "^1.0.8",
+    "ox": "^0.8.8"
+  }
+}
