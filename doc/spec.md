@@ -314,12 +314,7 @@ Because the `Verifier` is not required to store configuration, it must trust the
 
 ### Signature replayability on the `Verifier`
 
-`Verifier` contracts in this specification are intentionally stateless. The
-`validateData` call only attests that the provided
-signature (i.e. `data` input) correspond to the given `message` under the provided `config`.
-They do not track or consume nonces. As a result, signature replayability is a
-property of the upstream protocol that constructs the
-`message`, not of the `Verifier` itself. Common examples of this are detailed below.
+`Verifier` contracts in this specification are intentionally stateless. The `validateData` call only attests that the provided signature (i.e. `data` input) correspond to the given `message` under the provided `config`. They do not track or consume nonces. As a result, signature replayability is a property of the upstream protocol that constructs the `message`, not of the `Verifier` itself. Common examples of this are detailed below.
 
 - **Update flow (`handleUpdates` call)**: Replay is prevented by the
   `Keystore` via a 2D nonce packed into `UpdateAction.nonce`. Cross chain replay can also be prevented by binding the signed message to the `chainId` with the `action.useChainId` flag. The `Verifier` does not need to add additional nonce checks here.
