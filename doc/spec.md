@@ -347,3 +347,13 @@ It is therefore recommended that wallets provide robust backup options for the M
 The simple approach outlined in the rationale would be considered safe because there are no avenues for a compromised relayer to escalate privileges and gain full access to account funds. In the worst case, an account holder could pay the service fee and the relayer would not execute on the sync. In such a case the account is free to exit out of the relaying service with no lock-ins.
 
 That said, there are legitimate security concerns if a relaying service is given the ability to update the `rootHash` on its own rather then only broadcasting updates that have been signed by the account holder. In the former case, there will be a clear route for privilege escalation where a relayer could update the `rootHash` to a config where it has the ability to access account funds.
+
+### Handling cross-chain sync fragmentation
+
+The `Keystore` is designed to ensure that a multi-chain account can keep its configuration easily in sync. However fragmentation is NOT completely unavoidable and the user, wallet, and delegated relayer should have processes in place to bring it back into sync. Common fragmentation scenarios are outlined below.
+
+- **Deployment on new chain**: All past `UpdateActions` can either be replayed in order or the wallet can prompt the user to sign a once off `UpdateAction` to bring the new chain in sync. Future updates can make use of a new `nonceKey` to ensure the nonce sequence of the new chain is aligned with the rest.
+- **Update fails on some chains**: This could occur for a number of chain specific reasons. For example if an `UpdateAction` was created assuming a cached node but the node has not been registered on all chains then this would lead to some chains reverting with an `UnregisteredProof()` error. Wallets must rectify this by prompting the user to sign a second `UpdateAction` but without using the cache. Similarly, relayers must be able to manage competing `UpdateActions` with the same nonce if replaying on new chains.
+- **Competing updates at the same nonce**: If multiple `UpdateActions` with the same `nonce` are signed and different subsets of chains accept different `nextHash` values, chains will diverge. This can be resolve by selecting a canonical root and issuing a subsequent `UpdateAction` from each chain’s current root to the canonical root.
+
+Although the protocol makes it feasible to maintain cross-chain sync of account configuration, it is the responsibility of off-chain entities to ensure fragmentation is avoided or resolved.
