@@ -322,6 +322,14 @@ Because the `Verifier` is not required to store configuration, it must trust the
   - **ERC-4337 accounts**: The `message` SHOULD be the `userOpHash` which considers the `UserOperation` nonce. Replay protection is therefore provided by the ERC-4337 protocol. Submitting the same signed `userOpHash` again will fail due to the consumed account nonce.
   - **ERC-1271 / off-chain signatures**: If the `message` does not include a nonce, timestamp window, session identifier, or other anti-replay material that is enforced by the upstream protocol or application, then a valid signature over the same `message` will be replayable by design.
 
+### Users and wallets must have a secure process for adding `Verifiers`
+
+The `Keystore` does not impose any checks on each node beyond verifying its inclusion within the Merkle tree. The upside is that any verification scheme can be supported as long as the `Verifier` adheres to the correct interface. However, this could also pose a security risk if not careful. For example, a verifier that always returns `SIG_VALIDATION_SUCCESS` could allow a full account takeover by any entity that can generate a correct proof. To prevent this the following recommendations should be followed by users and wallet developers.
+
+- `Verifier` code MUST be audited and transparent.
+- All account stakeholders MUST have access to the full Merkle tree.
+- Stakeholders MUST be able to verify the expected Merkle tree aligns with the root hash stored onchain in order to prevent malicious interfaces from hiding unknown nodes.
+
 ### Handling the Merkle tree data structure
 
 The Merkle tree itself is not considered a secret value. If it was publicly exposed, then the privacy properties would become nullified since it would be possible to track associated recovery signers and verification schemes of the account. For operational security, it would be best practice to consider the account's Merkle tree as sensitive.
