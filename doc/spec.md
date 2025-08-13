@@ -324,7 +324,7 @@ Because the `Verifier` is not required to store configuration, it must trust the
 
 ### Users and wallets must have a secure process for adding `Verifiers`
 
-The `Keystore` does not impose any checks on each node beyond verifying its inclusion within the Merkle tree. The upside is that any verification scheme can be supported as long as the `Verifier` adheres to the correct interface. However, this could also pose a security risk if not careful. For example, a verifier that always returns `SIG_VALIDATION_SUCCESS` could allow a full takeover of the account by any entity that can generate a correct proof. To prevent this the following recommendations should be followed by users and wallet developers.
+The `Keystore` does not impose any checks on each node beyond verifying its inclusion within the Merkle tree. The upside is that any verification scheme can be supported as long as the `Verifier` adheres to the correct interface. However, this could also pose a security risk if not careful. For example, a verifier that always returns `SIG_VALIDATION_SUCCESS` could allow a full account takeover by any entity that can generate a correct proof. To prevent this the following recommendations should be followed by users and wallet developers.
 
 - `Verifier` code MUST be audited and transparent.
 - All account stakeholders MUST have access to the full Merkle tree.
