@@ -62,7 +62,7 @@ The following commands are useful for users and application developers to work w
 
 #### Verify configuration
 
-A minimal script to generate and verify a UCMT with the [openzeppelin Merkle tree library](https://github.com/OpenZeppelin/merkle-tree).
+A minimal script to generate and verify a UCMT using the [openzeppelin Merkle tree library](https://github.com/OpenZeppelin/merkle-tree).
 
 ```shell
 $ npm run examples:verify-ucmt
