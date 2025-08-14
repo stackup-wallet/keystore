@@ -243,9 +243,28 @@ It is worth noting that there is no enforced data structure on the `data` and `c
 When updating the root hash, the `Keystore` MUST call the `validateData` function with the following `message` format.
 
 ```solidity
-bytes32 message = useChainId
-    ? keccak256(abi.encode(refHash, nextHash, account, nonce, keccak256(node), block.chainid))
-    : keccak256(abi.encode(refHash, nextHash, account, nonce, keccak256(node)));
+bytes32 message = action.useChainId
+    ? keccak256(
+        abi.encode(
+            action.refHash,
+            action.nextHash,
+            action.account,
+            action.nonce,
+            keccak256(action.node),
+            keccak256(action.nextNode),
+            block.chainid
+        )
+    )
+    : keccak256(
+        abi.encode(
+            action.refHash,
+            action.nextHash,
+            action.account,
+            action.nonce,
+            keccak256(action.node),
+            keccak256(action.nextNode)
+        )
+    );
 ```
 
 Note that by default, `chainId` is not part of this message hash since it is expected that an `UpdateAction` can be replayed across all chains. However, under certain scenarios where a user does NOT require cross chain replayability, the `useChainId` flag in `UpdateAction` can be set to `true`. The resulting message hash will then include the `chainId` for signing.

@@ -153,8 +153,22 @@ contract Keystore is IKeystore, ReentrancyGuardTransient {
         returns (bytes32 message)
     {
         message = action.useChainId
-            ? keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash, block.chainid))
-            : keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash));
+            ? keccak256(
+                abi.encode(
+                    action.refHash,
+                    action.nextHash,
+                    action.account,
+                    action.nonce,
+                    nodeHash,
+                    keccak256(action.nextNode),
+                    block.chainid
+                )
+            )
+            : keccak256(
+                abi.encode(
+                    action.refHash, action.nextHash, action.account, action.nonce, nodeHash, keccak256(action.nextNode)
+                )
+            );
     }
 
     function _isSigValidationFailed(bytes32 message, bytes memory node, bytes memory data)

@@ -64,7 +64,8 @@ contract Keystore32NodeUCMT is Test {
                     actions[0].nextHash,
                     actions[0].account,
                     actions[0].nonce,
-                    keccak256(actions[0].node)
+                    keccak256(actions[0].node),
+                    keccak256(actions[0].nextNode)
                 )
             ),
             actions[0].node,
@@ -91,7 +92,8 @@ contract Keystore32NodeUCMT is Test {
                     actions[0].nextHash,
                     actions[0].account,
                     actions[0].nonce,
-                    keccak256(actions[0].node)
+                    keccak256(actions[0].node),
+                    keccak256(actions[0].nextNode)
                 )
             ),
             actions[0].node,

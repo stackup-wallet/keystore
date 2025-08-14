@@ -599,12 +599,18 @@ contract KeystoreTest is Test {
                         address(this),
                         actions[0].nonce,
                         keccak256(actions[0].node),
+                        keccak256(actions[0].nextNode),
                         block.chainid
                     )
                 )
                 : keccak256(
                     abi.encode(
-                        actions[0].refHash, actions[0].nextHash, address(this), actions[0].nonce, keccak256(actions[0].node)
+                        actions[0].refHash,
+                        actions[0].nextHash,
+                        address(this),
+                        actions[0].nonce,
+                        keccak256(actions[0].node),
+                        keccak256(actions[0].nextNode)
                     )
                 ),
             actions[0].node,
@@ -621,12 +627,18 @@ contract KeystoreTest is Test {
                         address(this),
                         actions[1].nonce,
                         keccak256(actions[1].node),
+                        keccak256(actions[1].nextNode),
                         block.chainid
                     )
                 )
                 : keccak256(
                     abi.encode(
-                        actions[1].refHash, actions[1].nextHash, address(this), actions[1].nonce, keccak256(actions[1].node)
+                        actions[1].refHash,
+                        actions[1].nextHash,
+                        address(this),
+                        actions[1].nonce,
+                        keccak256(actions[1].node),
+                        keccak256(actions[1].nextNode)
                     )
                 ),
             actions[1].node,
@@ -752,8 +764,11 @@ contract KeystoreTest is Test {
         updateInputs.nextProof = next.proof;
         updateInputs.nextNode = next.node;
         updateInputs.nonce = keystore.getNonce(curr.root, address(this), nonceKey);
-        updateInputs.message =
-            keccak256(abi.encode(curr.root, next.root, address(this), updateInputs.nonce, keccak256(curr.node)));
+        updateInputs.message = keccak256(
+            abi.encode(
+                curr.root, next.root, address(this), updateInputs.nonce, keccak256(curr.node), keccak256(next.node)
+            )
+        );
     }
 
     function _packNodeAndGetUpdateInputsWithNextNodeVerifier(
@@ -774,8 +789,11 @@ contract KeystoreTest is Test {
         updateInputs.nextProof = next.proof;
         updateInputs.nextNode = next.node;
         updateInputs.nonce = keystore.getNonce(curr.root, address(this), nonceKey);
-        updateInputs.message =
-            keccak256(abi.encode(curr.root, next.root, address(this), updateInputs.nonce, keccak256(curr.node)));
+        updateInputs.message = keccak256(
+            abi.encode(
+                curr.root, next.root, address(this), updateInputs.nonce, keccak256(curr.node), keccak256(next.node)
+            )
+        );
     }
 
     function _packNodeAndGetUpdateInputs(
@@ -794,8 +812,11 @@ contract KeystoreTest is Test {
         updateInputs.nextHash = next.root;
         updateInputs.nextProof = next.proof;
         updateInputs.nonce = keystore.getNonce(curr.root, address(this), nonceKey);
-        updateInputs.message =
-            keccak256(abi.encode(curr.root, next.root, address(this), updateInputs.nonce, keccak256(curr.node)));
+        updateInputs.message = keccak256(
+            abi.encode(
+                curr.root, next.root, address(this), updateInputs.nonce, keccak256(curr.node), keccak256(next.node)
+            )
+        );
     }
 
     function _getUpdateInputs(uint192 nonceKey, bytes32[] calldata nodes, uint256 index, bytes memory node)
@@ -812,8 +833,9 @@ contract KeystoreTest is Test {
         updateInputs.nextHash = next.root;
         updateInputs.nextProof = next.proof;
         updateInputs.nonce = keystore.getNonce(root, address(this), nonceKey);
-        updateInputs.message =
-            keccak256(abi.encode(root, next.root, address(this), updateInputs.nonce, keccak256(node)));
+        updateInputs.message = keccak256(
+            abi.encode(root, next.root, address(this), updateInputs.nonce, keccak256(node), keccak256(next.node))
+        );
     }
 
     function _getUpdateActions(
