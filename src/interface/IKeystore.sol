@@ -6,12 +6,13 @@ import {UpdateAction, ValidateAction} from "../lib/Actions.sol";
 interface IKeystore {
     error InvalidNonce();
     error InvalidProof();
+    error InvalidNextProof();
     error UnregisteredProof();
     error InvalidNode();
     error InvalidVerifier();
 
     event RootHashUpdated(
-        bytes32 indexed refHash, bytes32 nextHash, uint256 nonce, bytes proof, bytes node, bytes data, bool success
+        bytes32 indexed refHash, address indexed account, bytes32 indexed nextHash, uint256 nonce, bool success
     );
 
     function handleUpdates(UpdateAction[] calldata actions) external;

@@ -22,6 +22,7 @@ contract Keystore is IKeystore, ReentrancyGuardTransient {
      * any of the following errors:
      *   - InvalidNonce()
      *   - InvalidProof()
+     *   - InvalidNextProof()
      *   - UnregisteredProof()
      *   - InvalidNode()
      *   - InvalidVerifier()
@@ -35,27 +36,25 @@ contract Keystore is IKeystore, ReentrancyGuardTransient {
         uint256 length = actions.length;
         for (uint256 i = 0; i < length; i++) {
             UpdateAction calldata action = actions[i];
+
             (uint192 nonceKey, uint64 nonceSeq) = _unpackNonceKey(action.nonce);
             uint64 currSeq = _validateAndGetNonce(action.refHash, action.account, nonceKey, nonceSeq);
 
             (bytes32 nodeHash, bytes memory node) =
                 _fetchOrValidateNode(action.refHash, action.account, action.proof, action.node);
-            (address verifier, bytes memory config) = _unpackNode(node);
-            bytes32 message = action.useChainId
-                ? keccak256(
-                    abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash, block.chainid)
-                )
-                : keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash));
-            if (IVerifier(verifier).validateData(message, action.data, config) == SIG_VALIDATION_FAILED) {
-                emit RootHashUpdated(
-                    action.refHash, action.nextHash, action.nonce, action.proof, node, action.data, false
-                );
+            bytes32 message = _getUpdateActionHash(action, nodeHash);
+
+            if (_isSigValidationFailed(message, node, action.data)) {
+                emit RootHashUpdated(action.refHash, action.account, action.nextHash, action.nonce, false);
+            } else if (
+                _requiresNextNodeVerifierCall(action.nextHash, nodeHash, action.nextProof, action.nextNode)
+                    && _isSigValidationFailed(message, action.nextNode, action.nextData)
+            ) {
+                emit RootHashUpdated(action.refHash, action.account, action.nextHash, action.nonce, false);
             } else {
                 _rootHash[action.refHash][action.account] = action.nextHash;
                 _incrementNonce(action.refHash, action.account, nonceKey, currSeq);
-                emit RootHashUpdated(
-                    action.refHash, action.nextHash, action.nonce, action.proof, node, action.data, true
-                );
+                emit RootHashUpdated(action.refHash, action.account, action.nextHash, action.nonce, true);
             }
         }
     }
@@ -145,6 +144,41 @@ contract Keystore is IKeystore, ReentrancyGuardTransient {
             node = aNode;
             (bytes32[] memory proof) = abi.decode(aProof, (bytes32[]));
             require(MerkleProofLib.verify(proof, _getCurrentRootHash(refHash, account), nodeHash), InvalidProof());
+        }
+    }
+
+    function _getUpdateActionHash(UpdateAction calldata action, bytes32 nodeHash)
+        internal
+        view
+        returns (bytes32 message)
+    {
+        message = action.useChainId
+            ? keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash, block.chainid))
+            : keccak256(abi.encode(action.refHash, action.nextHash, action.account, action.nonce, nodeHash));
+    }
+
+    function _isSigValidationFailed(bytes32 message, bytes memory node, bytes memory data)
+        internal
+        view
+        returns (bool)
+    {
+        (address verifier, bytes memory config) = _unpackNode(node);
+        return IVerifier(verifier).validateData(message, data, config) == SIG_VALIDATION_FAILED;
+    }
+
+    function _requiresNextNodeVerifierCall(
+        bytes32 nextHash,
+        bytes32 nodeHash,
+        bytes calldata nextProof,
+        bytes calldata nextNode
+    ) internal pure returns (bool) {
+        (bytes32[] memory proof) = abi.decode(nextProof, (bytes32[]));
+        if (nextNode.length == 0) {
+            require(MerkleProofLib.verify(proof, nextHash, nodeHash), InvalidNextProof());
+            return false;
+        } else {
+            require(MerkleProofLib.verify(proof, nextHash, keccak256(nextNode)), InvalidNextProof());
+            return true;
         }
     }
 }

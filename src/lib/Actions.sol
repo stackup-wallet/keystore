@@ -10,6 +10,9 @@ struct UpdateAction {
     bytes proof;
     bytes node;
     bytes data;
+    bytes nextProof;
+    bytes nextNode;
+    bytes nextData;
 }
 
 struct ValidateAction {
