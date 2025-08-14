@@ -118,6 +118,22 @@ contract KeystoreTest is Test {
             )
         );
         assertEq(keystore.getRegisteredNode(props.init.root, address(this), initNodeHash).length, 0);
+
+        // Update rootHash back to refHash and cache state should follow
+        keystore.handleUpdates(
+            _getUpdateActions(
+                props.init.root,
+                props.init.root,
+                2,
+                props.fin.proof,
+                props.fin.node,
+                data,
+                props.init.proof,
+                props.init.node,
+                data
+            )
+        );
+        assertGe(keystore.getRegisteredNode(props.init.root, address(this), initNodeHash).length, 20);
     }
 
     function testFuzz_registerNodeWithInvalidNode(bytes32[] calldata nodes, uint256 index, bytes calldata node)
