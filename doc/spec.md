@@ -190,7 +190,7 @@ The returned `validationData` is a `uint256` with no implied structure except fo
 As a safety mechanism to prevent account bricking, the `Keystore` will also verify that the root hash of the next UCMT can be accessible by at least one known node. To do this, an `UpdateAction` has a mandatory field for `nextProof` and optional fields for `nextNode` and `nextData`. During an update, two flows are considered.
 
 1. The current `node` is included in the next UCMT. In this case `nextNode` and `nextData` is set to `nil`. The `Keystore` will verify `nextProof` and only a single `node` verifier call is required.
-2. The current `node` is NOT included in the next UCMT. In this case, `nextNode` and `nextData` is required. The `Keystore` will verify `nextProof` and make an additional call to the `nextNode` verifier.
+2. The current `node` is either not included in the next UCMT or obfuscated. In this case, `nextNode` and `nextData` is required. The `Keystore` will verify `nextProof` and make an additional call to the `nextNode` verifier.
 
 ##### Replay protection
 
