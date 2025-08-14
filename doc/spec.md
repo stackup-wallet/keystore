@@ -155,7 +155,7 @@ Updating a configuration set is equivalent to updating the current root hash in 
 | `data`       | `bytes`   | Arbitrary data for the verifier.                                                                    |
 | `nextProof`  | `bytes`   | Merkle proof for verifying inclusion of the `node` or `nextNode` in the updated root hash.          |
 | `nextNode`   | `bytes`   | Optional next node data containing `verifier` and `config`. If `nil`, `node` will be used.          |
-| `nextData`   | `bytes`   | Optional arbitrary data for the next verifier. If `nil`, `data` will be used.                       |
+| `nextData`   | `bytes`   | Optional arbitrary data for the next verifier.                                                      |
 
 On a systems level, the root hash update has the following lifecycle.
 
@@ -164,17 +164,24 @@ sequenceDiagram
     Caller->>Keystore: Call handleUpdates
     loop Every update action
         Keystore->>Keystore: Get latest root hash
-        Keystore->>Keystore: Verify proofs
+        Keystore->>Keystore: Prove node inclusion in root hash
         Keystore->>Verifier: Call validateData
         Verifier->>Verifier: Verify update data
         Verifier->>Keystore: Return validationData
+        alt next node is nil
+            Keystore->>Keystore: Prove node inclusion in next root hash
+        else
+            Keystore->>Keystore: Prove next node inclusion in next root hash
+            Keystore->>Next Verifier: Call validateData
+            Next Verifier->>Keystore: Return validationData
+        end
         Keystore->>Keystore: Update root hash
     end
 ```
 
-This process begins with the `Caller` initiating the `handleUpdates` function on the `Keystore` contract. For every `UpdateAction` in the batch, the `Keystore` MUST verify the UCMT proofs. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the update to the next root hash is valid and returns a corresponding `validationData` value.
+This process begins with the `Caller` initiating the `handleUpdates` function on the `Keystore` contract. For every `UpdateAction` in the batch, the `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the update to the next root hash is valid and returns a corresponding `validationData` value.
 
-Note that `handleUpdates` accepts a batch of `updateAction` objects by design in order to support use cases where other entities, such as solvers, are relaying updates on behalf of many accounts.
+Note that `handleUpdates` accepts a batch of `updateAction` objects by design in order to support use cases where other entities, such as relayers, are broadcasting updates on behalf of many accounts.
 
 The returned `validationData` is a `uint256` with no implied structure except for a literal value of `1` which MUST signal a failed validation. Besides this, the `Verifier` and downstream callers are free to interpret this value in any way they see fit. This pattern was made to be especially adaptable with ERC-4337 which has specific standards for packing `validUntil` and `validAfter` values for a transaction.
 
