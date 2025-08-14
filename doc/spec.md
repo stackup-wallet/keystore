@@ -88,6 +88,9 @@ struct UpdateAction {
     bytes proof;
     bytes node;
     bytes data;
+    bytes nextProof;
+    bytes nextNode;
+    bytes nextData;
 }
 
 struct ValidateAction {
@@ -101,19 +104,20 @@ struct ValidateAction {
 interface Keystore {
     error InvalidNonce();
     error InvalidProof();
+    error InvalidNextProof();
     error UnregisteredProof();
     error InvalidNode();
     error InvalidVerifier();
 
     event RootHashUpdated(
-        bytes32 indexed refHash, bytes32 nextHash, uint256 nonce, bytes proof, bytes node, bytes data, bool success
+        bytes32 indexed refHash, address indexed account, bytes32 indexed nextHash, uint256 nonce, bool success
     );
 
     function handleUpdates(UpdateAction[] calldata actions) external;
     function validate(ValidateAction calldata action) external view returns (uint256 validationData);
 
     function registerNode(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external;
-    function getRegisteredNode(bytes32 refHash, address account, bytes calldata node)
+    function getRegisteredNode(bytes32 refHash, address account, bytes32 nodeHash)
         external
         view
         returns (bytes memory);
@@ -139,15 +143,19 @@ In the initial edge case where `rootHash` is equal to zero, then the `Keystore` 
 
 Updating a configuration set is equivalent to updating the current root hash in the `Keystore`. The essential data structure in this flow is the `UpdateAction` intent.
 
-| Field      | Type        | Description                                                                           |
-| ---------- | ----------- | ------------------------------------------------------------------------------------- |
-| `refHash`  | `bytes32`   | Permanent reference hash for the UCMT.                                                |
-| `nextHash` | `bytes32`   | Next root hash after the update.                                                      |
-| `nonce`    | `uint256`   | 2D nonce with packed `uint192` key and `uint64` sequence. Prevents replaying updates. |
-| `account`  | `address`   | The account address tied to this `refHash`.                                           |
-| `proof`    | `bytes32[]` | Merkle proof for the node.                                                            |
-| `node`     | `bytes`     | Node data containing `verifier` and `config`.                                         |
-| `data`     | `bytes`     | Arbitrary data for the verifier.                                                      |
+| Field        | Type      | Description                                                                                         |
+| ------------ | --------- | --------------------------------------------------------------------------------------------------- |
+| `refHash`    | `bytes32` | Permanent reference hash for the UCMT.                                                              |
+| `nextHash`   | `bytes32` | Next root hash after the update.                                                                    |
+| `nonce`      | `uint256` | 2D nonce with packed `uint192` key and `uint64` sequence. Prevents replaying updates.               |
+| `useChainId` | `bool`    | A flag to signal the `Keystore` to include the `chainId` in the message for chain specific updates. |
+| `account`    | `address` | The account address tied to this `refHash`.                                                         |
+| `proof`      | `bytes`   | Merkle proof for the node.                                                                          |
+| `node`       | `bytes`   | Node data containing `verifier` and `config`.                                                       |
+| `data`       | `bytes`   | Arbitrary data for the verifier.                                                                    |
+| `nextProof`  | `bytes`   | Merkle proof for verifying inclusion of the `node` or `nextNode` in the updated root hash.          |
+| `nextNode`   | `bytes`   | Optional next node data containing `verifier` and `config`. If `nil`, `node` will be used.          |
+| `nextData`   | `bytes`   | Optional arbitrary data for the next verifier.                                                      |
 
 On a systems level, the root hash update has the following lifecycle.
 
@@ -156,19 +164,33 @@ sequenceDiagram
     Caller->>Keystore: Call handleUpdates
     loop Every update action
         Keystore->>Keystore: Get latest root hash
-        Keystore->>Keystore: Verify proof
+        Keystore->>Keystore: Prove node inclusion in root hash
         Keystore->>Verifier: Call validateData
         Verifier->>Verifier: Verify update data
         Verifier->>Keystore: Return validationData
+        alt next node is nil
+            Keystore->>Keystore: Prove node inclusion in next root hash
+        else
+            Keystore->>Keystore: Prove next node inclusion in next root hash
+            Keystore->>Next Verifier: Call validateData
+            Next Verifier->>Keystore: Return validationData
+        end
         Keystore->>Keystore: Update root hash
     end
 ```
 
 This process begins with the `Caller` initiating the `handleUpdates` function on the `Keystore` contract. For every `UpdateAction` in the batch, the `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the update to the next root hash is valid and returns a corresponding `validationData` value.
 
-Note that `handleUpdates` accepts a batch of `updateAction` objects by design in order to support use cases where other entities, such as solvers, are relaying updates on behalf of many accounts.
+Note that `handleUpdates` accepts a batch of `updateAction` objects by design in order to support use cases where other entities, such as relayers, are broadcasting updates on behalf of many accounts.
 
 The returned `validationData` is a `uint256` with no implied structure except for a literal value of `1` which MUST signal a failed validation. Besides this, the `Verifier` and downstream callers are free to interpret this value in any way they see fit. This pattern was made to be especially adaptable with ERC-4337 which has specific standards for packing `validUntil` and `validAfter` values for a transaction.
+
+##### Next root hash validation
+
+As a safety mechanism to prevent account bricking, the `Keystore` will also verify that the root hash of the next UCMT can be accessible by at least one known node. To do this, an `UpdateAction` has a mandatory field for `nextProof` and optional fields for `nextNode` and `nextData`. During an update, two flows are considered.
+
+1. The current `node` is included in the next UCMT. In this case `nextNode` and `nextData` is set to `nil`. The `Keystore` will verify `nextProof` and only a single `node` verifier call is required.
+2. The current `node` is either not included in the next UCMT or obfuscated. In this case, `nextNode` and `nextData` is required. The `Keystore` will verify `nextProof` and make an additional call to the `nextNode` verifier.
 
 ##### Replay protection
 
@@ -228,9 +250,28 @@ It is worth noting that there is no enforced data structure on the `data` and `c
 When updating the root hash, the `Keystore` MUST call the `validateData` function with the following `message` format.
 
 ```solidity
-bytes32 message = useChainId
-    ? keccak256(abi.encode(refHash, nextHash, account, nonce, keccak256(node), block.chainid))
-    : keccak256(abi.encode(refHash, nextHash, account, nonce, keccak256(node)));
+bytes32 message = action.useChainId
+    ? keccak256(
+        abi.encode(
+            action.refHash,
+            action.nextHash,
+            action.account,
+            action.nonce,
+            keccak256(action.node),
+            keccak256(action.nextNode),
+            block.chainid
+        )
+    )
+    : keccak256(
+        abi.encode(
+            action.refHash,
+            action.nextHash,
+            action.account,
+            action.nonce,
+            keccak256(action.node),
+            keccak256(action.nextNode)
+        )
+    );
 ```
 
 Note that by default, `chainId` is not part of this message hash since it is expected that an `UpdateAction` can be replayed across all chains. However, under certain scenarios where a user does NOT require cross chain replayability, the `useChainId` flag in `UpdateAction` can be set to `true`. The resulting message hash will then include the `chainId` for signing.
