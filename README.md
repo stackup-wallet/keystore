@@ -44,16 +44,16 @@ $ forge test
 
 ```shell
 # Keystore
-source .env && forge script script/DeployKeystore.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployKeystore.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
 
 # Keystore account factory
-source .env && forge script script/DeployKeystoreAccountFactory.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployKeystoreAccountFactory.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
 
 # Verifiers
-source .env && forge script script/DeployUserOpECDSAVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
-source .env && forge script script/DeployUserOpMultiSigVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
-source .env && forge script script/DeployUserOpWebAuthnVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
-source .env && forge script script/DeployUserOpWebAuthnCosignVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpECDSAVerifier.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpMultiSigVerifier.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpWebAuthnVerifier.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpWebAuthnCosignVerifier.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
 ```
 
 ### Example scripts
