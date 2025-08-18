@@ -10,12 +10,12 @@ All contracts are deployed deterministically with the following addresses.
 
 | Contract                     | Address                                      |
 | ---------------------------- | -------------------------------------------- |
-| Keystore                     | `0x18c90BdFc5667D11605ebde82E5E9CDC4D789363` |
-| KeystoreAccountFactory       | `0x2F775F9FFC02231C3Bb1EA1281f1Da9ba2f2a069` |
-| UserOpECDSAVerifier          | `0xf5bC4DB1cdedf1aDDD0d6543BA669837d5D0f3b3` |
-| UserOpMultiSigVerifier       | `0xC498f1f881bdd8a2FEB6aABf166cF6E08Cf4e559` |
-| UserOpWebAuthnVerifier       | `0xEcb9be3dbB737Ed13a768B2B7D030B483Bf5c9f2` |
-| UserOpWebAuthnCosignVerifier | `0x36674817e050a37DA325d66B6dbD1a93063Dc6B9` |
+| Keystore                     | `0x69C9F626b5Bd934C0F9806346682eD407FB978d3` |
+| KeystoreAccountFactory       | `0x625cF8EDec3f68d48D3aA385F356524B04760BE8` |
+| UserOpECDSAVerifier          | `0x294CD71960eed5AEa11DbbFa5D3c8eA4A1c1CE0F` |
+| UserOpMultiSigVerifier       | `0x1dBadE1E34706f83598ae9acFC63B7F4f928146E` |
+| UserOpWebAuthnVerifier       | `0xE19620169A26aEbC4Fe229A073639da6b009bF1a` |
+| UserOpWebAuthnCosignVerifier | `0x7CD0D83C0c33AAC9cef88c75F3EDec80F4175252` |
 
 ## Usage
 
@@ -25,6 +25,7 @@ Before being able to run any command, you need to create a .env file and set you
 
 ```shell
 $ forge install
+$ npm install
 ```
 
 ### Build
@@ -43,14 +44,26 @@ $ forge test
 
 ```shell
 # Keystore
-source .env && forge script script/DeployKeystore.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployKeystore.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
 
 # Keystore account factory
-source .env && forge script script/DeployKeystoreAccountFactory.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployKeystoreAccountFactory.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
 
 # Verifiers
-source .env && forge script script/DeployUserOpECDSAVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
-source .env && forge script script/DeployUserOpMultiSigVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
-source .env && forge script script/DeployUserOpWebAuthnVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
-source .env && forge script script/DeployUserOpWebAuthnCosignVerifier.s.sol --rpc-url $BASE_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpECDSAVerifier.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpMultiSigVerifier.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpWebAuthnVerifier.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
+source .env && forge script script/DeployUserOpWebAuthnCosignVerifier.s.sol --rpc-url $ETH_RPC_URL --ledger --verify --broadcast
+```
+
+### Example scripts
+
+The following commands are useful for users and application developers to work with the Keystore protocol.
+
+#### Verify configuration
+
+A minimal script to generate and verify a UCMT using the [openzeppelin Merkle tree library](https://github.com/OpenZeppelin/merkle-tree).
+
+```shell
+$ npm run examples:verify-ucmt
 ```

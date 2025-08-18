@@ -20,16 +20,16 @@ contract KeystoreAccountFactoryTest is Test {
         factory = new KeystoreAccountFactory(entryPoint, keystore);
     }
 
-    function testFuzz_addPermanentEntryPointStake(uint32 unstakeDelaySec, uint112 value) public {
-        vm.assume(unstakeDelaySec > 0 && value > 0);
+    function testFuzz_addPermanentEntryPointStake(uint112 value) public {
+        vm.assume(value > 0);
         vm.deal(address(this), value);
-        factory.addPermanentEntryPointStake{value: value}(unstakeDelaySec);
+        factory.addPermanentEntryPointStake{value: value}();
 
         IStakeManager.DepositInfo memory stake = entryPoint.getDepositInfo(address(factory));
         assertEq(stake.deposit, 0);
         assertEq(stake.staked, true);
         assertEq(stake.stake, value);
-        assertEq(stake.unstakeDelaySec, unstakeDelaySec);
+        assertEq(stake.unstakeDelaySec, type(uint32).max);
         assertEq(stake.withdrawTime, 0);
     }
 
@@ -58,7 +58,7 @@ contract KeystoreAccountFactoryTest is Test {
         vm.assume(caller != address(entryPoint.senderCreator()));
 
         vm.prank(caller);
-        vm.expectRevert("only callable from SenderCreator");
+        vm.expectRevert(KeystoreAccountFactory.NotFromSenderCreator.selector);
         factory.createAccount(refHash, salt);
     }
 }

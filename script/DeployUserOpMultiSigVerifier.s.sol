@@ -7,7 +7,7 @@ import {UserOpMultiSigVerifier} from "src/verifier/UserOpMultiSigVerifier.sol";
 
 contract Deploy is Script {
     function run() public {
-        address keystore = 0x18c90BdFc5667D11605ebde82E5E9CDC4D789363;
+        address keystore = 0x69C9F626b5Bd934C0F9806346682eD407FB978d3;
 
         vm.startBroadcast();
         UserOpMultiSigVerifier verifier = new UserOpMultiSigVerifier{salt: 0}(keystore);

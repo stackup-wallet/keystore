@@ -60,10 +60,10 @@ graph TD
     HashD --> Config7[Node #7]
     HashD --> Config8[Node #8]
 
-    style Config3 fill:darkblue
-    style Config4 fill:darkblue
-    style HashA fill:darkblue
-    style HashCD fill:darkblue
+    style Config3 fill:blue,color:white
+    style Config4 fill:blue,color:white
+    style HashA fill:blue,color:white
+    style HashCD fill:blue,color:white
 ```
 
 ### `Keystore` singleton
@@ -83,16 +83,20 @@ struct UpdateAction {
     bytes32 refHash;
     bytes32 nextHash;
     uint256 nonce;
+    bool useChainId;
     address account;
-    bytes32[] proof;
+    bytes proof;
     bytes node;
     bytes data;
+    bytes nextProof;
+    bytes nextNode;
+    bytes nextData;
 }
 
 struct ValidateAction {
     bytes32 refHash;
     bytes32 message;
-    bytes32[] proof;
+    bytes proof;
     bytes node;
     bytes data;
 }
@@ -100,43 +104,58 @@ struct ValidateAction {
 interface Keystore {
     error InvalidNonce();
     error InvalidProof();
+    error InvalidNextProof();
+    error UnregisteredProof();
     error InvalidNode();
     error InvalidVerifier();
 
     event RootHashUpdated(
-        bytes32 indexed refHash, bytes32 nextHash, uint256 nonce, bytes32[] proof, bytes node, bytes data, bool success
+        bytes32 indexed refHash, address indexed account, bytes32 indexed nextHash, uint256 nonce, bool success
     );
 
     function handleUpdates(UpdateAction[] calldata actions) external;
     function validate(ValidateAction calldata action) external view returns (uint256 validationData);
+
+    function registerNode(bytes32 refHash, bytes32[] calldata proof, bytes calldata node) external;
+    function getRegisteredNode(bytes32 refHash, address account, bytes32 nodeHash)
+        external
+        view
+        returns (bytes memory);
+
+    function getRootHash(bytes32 refHash, address account) external view returns (bytes32 rootHash);
+    function getNonce(bytes32 refHash, address account, uint192 key) external view returns (uint256 nonce);
 }
 ```
 
 #### Storage of root hashes
 
-All root hashes in the `Keystore` contract MUST be stored in a mapping of the initial root hash to the current root hash.
+All root hashes in the `Keystore` contract MUST be stored in a mapping of the initial root hash (i.e. the `refHash`) to the current root hash.
 
 ```solidity
-mapping(bytes32 => mapping(address => bytes32)) public rootHash;
+mapping(bytes32 refHash => mapping(address account => bytes32 rootHash)) internal _rootHash;
 ```
 
 This is essential in order to provide an account with a permanent reference to the latest configuration. Without a permanent reference, it would be impossible for a dependent account to generate counterfactual addresses that are decoupled from configuration updates.
 
-In the initial edge case where `currentHash` is equal to zero, then the `Keystore` MUST assume the `refHash` as the value.
+In the initial edge case where `rootHash` is equal to zero, then the `Keystore` MUST assume the `refHash` as the current root hash. External systems are able to query for the current root hash using the `getRootHash` method which takes this logic into consideration.
 
 #### Handling root hash updates
 
 Updating a configuration set is equivalent to updating the current root hash in the `Keystore`. The essential data structure in this flow is the `UpdateAction` intent.
 
-| Field      | Type        | Description                                                                           |
-| ---------- | ----------- | ------------------------------------------------------------------------------------- |
-| `refHash`  | `bytes32`   | Permanent reference hash for the UCMT.                                                |
-| `nextHash` | `bytes32`   | Next root hash after the update.                                                      |
-| `nonce`    | `uint256`   | 2D nonce with packed `uint192` key and `uint64` sequence. Prevents replaying updates. |
-| `account`  | `address`   | The account address tied to this `refHash`.                                           |
-| `proof`    | `bytes32[]` | Merkle proof for the node.                                                            |
-| `node`     | `bytes`     | Node data containing `verifier` and `config`.                                         |
-| `data`     | `bytes`     | Arbitrary data for the verifier.                                                      |
+| Field        | Type      | Description                                                                                         |
+| ------------ | --------- | --------------------------------------------------------------------------------------------------- |
+| `refHash`    | `bytes32` | Permanent reference hash for the UCMT.                                                              |
+| `nextHash`   | `bytes32` | Next root hash after the update.                                                                    |
+| `nonce`      | `uint256` | 2D nonce with packed `uint192` key and `uint64` sequence. Prevents replaying updates.               |
+| `useChainId` | `bool`    | A flag to signal the `Keystore` to include the `chainId` in the message for chain specific updates. |
+| `account`    | `address` | The account address tied to this `refHash`.                                                         |
+| `proof`      | `bytes`   | Merkle proof for the node.                                                                          |
+| `node`       | `bytes`   | Node data containing `verifier` and `config`.                                                       |
+| `data`       | `bytes`   | Arbitrary data for the verifier.                                                                    |
+| `nextProof`  | `bytes`   | Merkle proof for verifying inclusion of the `node` or `nextNode` in the updated root hash.          |
+| `nextNode`   | `bytes`   | Optional next node data containing `verifier` and `config`. If `nil`, `node` will be used.          |
+| `nextData`   | `bytes`   | Optional arbitrary data for the next verifier.                                                      |
 
 On a systems level, the root hash update has the following lifecycle.
 
@@ -145,19 +164,33 @@ sequenceDiagram
     Caller->>Keystore: Call handleUpdates
     loop Every update action
         Keystore->>Keystore: Get latest root hash
-        Keystore->>Keystore: Verify proof
+        Keystore->>Keystore: Prove node inclusion in root hash
         Keystore->>Verifier: Call validateData
         Verifier->>Verifier: Verify update data
         Verifier->>Keystore: Return validationData
+        alt next node is nil
+            Keystore->>Keystore: Prove node inclusion in next root hash
+        else
+            Keystore->>Keystore: Prove next node inclusion in next root hash
+            Keystore->>Next Verifier: Call validateData
+            Next Verifier->>Keystore: Return validationData
+        end
         Keystore->>Keystore: Update root hash
     end
 ```
 
 This process begins with the `Caller` initiating the `handleUpdates` function on the `Keystore` contract. For every `UpdateAction` in the batch, the `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the update to the next root hash is valid and returns a corresponding `validationData` value.
 
-Note that `handleUpdates` accepts a batch of `updateAction` objects by design in order to support use cases where other entities, such as solvers, are relaying updates on behalf of many accounts.
+Note that `handleUpdates` accepts a batch of `updateAction` objects by design in order to support use cases where other entities, such as relayers, are broadcasting updates on behalf of many accounts.
 
 The returned `validationData` is a `uint256` with no implied structure except for a literal value of `1` which MUST signal a failed validation. Besides this, the `Verifier` and downstream callers are free to interpret this value in any way they see fit. This pattern was made to be especially adaptable with ERC-4337 which has specific standards for packing `validUntil` and `validAfter` values for a transaction.
+
+##### Next root hash validation
+
+As a safety mechanism to prevent account bricking, the `Keystore` will also verify that the root hash of the next UCMT can be accessible by at least one known node. To do this, an `UpdateAction` has a mandatory field for `nextProof` and optional fields for `nextNode` and `nextData`. During an update, two flows are considered.
+
+1. The current `node` is included in the next UCMT. In this case `nextNode` and `nextData` is set to `nil`. The `Keystore` will verify `nextProof` and only a single `node` verifier call is required.
+2. The current `node` is either not included in the next UCMT or obfuscated. In this case, `nextNode` and `nextData` is required. The `Keystore` will verify `nextProof` and make an additional call to the `nextNode` verifier.
 
 ##### Replay protection
 
@@ -179,6 +212,17 @@ sequenceDiagram
 ```
 
 During the account's validation phase, it makes a call to the `validate` function on the `Keystore`. The `Keystore` MUST verify the UCMT proof. If ok, then the `Keystore` calls `validateData` on the `Verifier` encoded in the `node`. This will check if the given signature for the message is valid and returns the corresponding validationData value.
+
+#### Optional node caching mechanism
+
+In the common case where a node is used for many transactions, it is a waste of gas to submit the same proof and node every time. Instead the `Keystore` has an optional method to cache a node with `registerNode`. This method will validate the UCMT proof and cache the `node` for a given `refHash` and `msg.sender`.
+
+During a validation flow, the `Keystore` will use the following logic to decide wether or not to use the cache:
+
+- **No cache**: If `action.proof` is NOT empty, then assume `action.node` is the actual `node` and run Merkle tree validation.
+- **With cache**: If `action.proof` is empty, then assume `action.node` is the hashed `keccak256` node. This is used to fetch the actual `node` from the cache and skip Merkle tree validation.
+
+Caching a node is optional since not all nodes can be assumed to be reused. Some use cases, such as an N/M guardian set for recovery, might be intended to only be used once. In such a case, the gas cost of caching is not required.
 
 ### Stateless `Verifier`
 
@@ -206,10 +250,31 @@ It is worth noting that there is no enforced data structure on the `data` and `c
 When updating the root hash, the `Keystore` MUST call the `validateData` function with the following `message` format.
 
 ```solidity
-bytes32 message = keccak256(abi.encode(refHash, nextRootHash, account, nonce, keccak256(node)))
+bytes32 message = action.useChainId
+    ? keccak256(
+        abi.encode(
+            action.refHash,
+            action.nextHash,
+            action.account,
+            action.nonce,
+            keccak256(action.node),
+            keccak256(action.nextNode),
+            block.chainid
+        )
+    )
+    : keccak256(
+        abi.encode(
+            action.refHash,
+            action.nextHash,
+            action.account,
+            action.nonce,
+            keccak256(action.node),
+            keccak256(action.nextNode)
+        )
+    );
 ```
 
-Note that `chainId` is not part of this message hash since it is expected that an `UpdateAction` can be replayed across all chains.
+Note that by default, `chainId` is not part of this message hash since it is expected that an `UpdateAction` can be replayed across all chains. However, under certain scenarios where a user does NOT require cross chain replayability, the `useChainId` flag in `UpdateAction` can be set to `true`. The resulting message hash will then include the `chainId` for signing.
 
 ## Rationale
 
@@ -288,6 +353,24 @@ Assuming the `Keystore` contract is audited and verified to be safe, there are s
 
 Because the `Verifier` is not required to store configuration, it must trust the given config from a `validateData` call. If this config comes from the `Keystore` then it can be trusted given its validity has been cryptographically guaranteed by the Merkle tree proof. Therefore, a `Verifier` should only be called by the `Keystore` and calling the `Verifier` directly (e.g. via the account) should be avoided.
 
+### Signature replayability on the `Verifier`
+
+`Verifier` contracts in this specification are intentionally stateless. The `validateData` call only attests that the provided signature (i.e. `data` input) correspond to the given `message` under the provided `config`. They do not track or consume nonces. As a result, signature replayability is a property of the upstream protocol that constructs the `message`, not of the `Verifier` itself. Common examples of this are detailed below.
+
+- **Update flow (`handleUpdates` call)**: Replay is prevented by the
+  `Keystore` via a 2D nonce packed into `UpdateAction.nonce`. Cross chain replay can also be prevented by binding the signed message to the `chainId` with the `action.useChainId` flag. The `Verifier` does not need to add additional nonce checks here.
+- **Validation flow (`validate` call)**: The `Keystore` forwards an arbitrary `message` chosen by the caller (typically the account). The `Verifier` only checks signature validity over that `message` and returns success or failure. Whether a valid signature can be replayed depends on how the `message` was formed.
+  - **ERC-4337 accounts**: The `message` SHOULD be the `userOpHash` which considers the `UserOperation` nonce. Replay protection is therefore provided by the ERC-4337 protocol. Submitting the same signed `userOpHash` again will fail due to the consumed account nonce.
+  - **ERC-1271 / off-chain signatures**: If the `message` does not include a nonce, timestamp window, session identifier, or other anti-replay material that is enforced by the upstream protocol or application, then a valid signature over the same `message` will be replayable by design.
+
+### Users and wallets must have a secure process for adding `Verifiers`
+
+The `Keystore` does not impose any checks on each node beyond verifying its inclusion within the Merkle tree. The upside is that any verification scheme can be supported as long as the `Verifier` adheres to the correct interface. However, this could also pose a security risk if not careful. For example, a verifier that always returns `SIG_VALIDATION_SUCCESS` could allow a full account takeover by any entity that can generate a correct proof. To prevent this the following recommendations should be followed by users and wallet developers.
+
+- `Verifier` code MUST be audited and transparent.
+- All account stakeholders MUST have access to the full Merkle tree.
+- Stakeholders MUST be able to verify the expected Merkle tree aligns with the root hash stored onchain in order to prevent malicious interfaces from hiding unknown nodes.
+
 ### Handling the Merkle tree data structure
 
 The Merkle tree itself is not considered a secret value. If it was publicly exposed, then the privacy properties would become nullified since it would be possible to track associated recovery signers and verification schemes of the account. For operational security, it would be best practice to consider the account's Merkle tree as sensitive.
@@ -305,3 +388,13 @@ It is therefore recommended that wallets provide robust backup options for the M
 The simple approach outlined in the rationale would be considered safe because there are no avenues for a compromised relayer to escalate privileges and gain full access to account funds. In the worst case, an account holder could pay the service fee and the relayer would not execute on the sync. In such a case the account is free to exit out of the relaying service with no lock-ins.
 
 That said, there are legitimate security concerns if a relaying service is given the ability to update the `rootHash` on its own rather then only broadcasting updates that have been signed by the account holder. In the former case, there will be a clear route for privilege escalation where a relayer could update the `rootHash` to a config where it has the ability to access account funds.
+
+### Handling cross-chain sync fragmentation
+
+The `Keystore` is designed to ensure that a multi-chain account can keep its configuration easily in sync. However fragmentation is NOT completely unavoidable and the user, wallet, and delegated relayer should have processes in place to bring it back into sync. Common fragmentation scenarios are outlined below.
+
+- **Deployment on new chain**: All past `UpdateActions` can either be replayed in order or the wallet can prompt the user to sign a once off `UpdateAction` to bring the new chain in sync. Future updates can make use of a new `nonceKey` to ensure the nonce sequence of the new chain is aligned with the rest.
+- **Update fails on some chains**: This could occur for a number of chain specific reasons. For example if an `UpdateAction` was created assuming a cached node but the node has not been registered on all chains then this would lead to some chains reverting with an `UnregisteredProof()` error. Wallets must rectify this by prompting the user to sign a second `UpdateAction` but without using the cache. Similarly, relayers must be able to manage competing `UpdateActions` with the same nonce and `nextHash` if replaying on other chains.
+- **Competing updates at the same nonce**: If multiple `UpdateActions` with the same `nonce` are signed and different subsets of chains accept different `nextHash` values, chains will diverge. This can be resolve by selecting a canonical root and issuing a subsequent `UpdateAction` from each chain’s current root to the canonical root.
+
+Although the protocol makes it feasible to maintain cross-chain sync of account configuration, it is the responsibility of off-chain entities to ensure fragmentation is avoided or resolved.
