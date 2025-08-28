@@ -21,6 +21,12 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
         bytes signature;
     }
 
+    struct SignatureCheck {
+        uint8 valid;
+        uint8 invalid;
+        bytes32 message;
+    }
+
     constructor(address aKeystore) OnlyKeystore(aKeystore) {}
 
     /**
@@ -65,18 +71,18 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
         uint256 length = signatures.length;
         require(length <= type(uint8).max, MaxSignaturesExceeded());
 
-        uint8 valid = 0;
-        uint8 invalid = 0;
+        SignatureCheck memory sc;
+        sc.message = ECDSA.toEthSignedMessageHash(message);
         bool[] memory seen = new bool[](owners.length);
         for (uint256 i = 0; i < length; i++) {
             SignerData memory sd = signatures[i];
 
             // Note: we need to ensure gas usage is consistent during simulation with dummy signers.
-            !seen[sd.index] && owners[sd.index] == _ecdsaRecover(message, sd.signature) ? valid++ : invalid++;
+            !seen[sd.index] && owners[sd.index] == ECDSA.recover(sc.message, sd.signature) ? sc.valid++ : sc.invalid++;
             seen[sd.index] = true;
         }
 
-        return valid >= threshold ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED;
+        return sc.valid >= threshold ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED;
     }
 
     // ================================================================
@@ -93,9 +99,5 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
         for (uint256 i = 1; i < length; i++) {
             require(owners[i] > owners[i - 1], OwnersUnsortedOrHasDuplicates());
         }
-    }
-
-    function _ecdsaRecover(bytes32 message, bytes memory signature) internal view returns (address) {
-        return ECDSA.recover(ECDSA.toEthSignedMessageHash(message), signature);
     }
 }
