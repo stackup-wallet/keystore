@@ -38,7 +38,7 @@ contract UserOpECDSAVerifier is IVerifier, OnlyKeystore {
             signature = userOp.signature;
         }
 
-        return address(bytes20(config)) == ECDSA.recover(message, signature)
+        return address(bytes20(config)) == ECDSA.recover(ECDSA.toEthSignedMessageHash(message), signature)
             ? SIG_VALIDATION_SUCCESS
             : SIG_VALIDATION_FAILED;
     }

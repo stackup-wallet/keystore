@@ -72,7 +72,7 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
             SignerData memory sd = signatures[i];
 
             // Note: we need to ensure gas usage is consistent during simulation with dummy signers.
-            !seen[sd.index] && owners[sd.index] == ECDSA.recover(message, sd.signature) ? valid++ : invalid++;
+            !seen[sd.index] && owners[sd.index] == _ecdsaRecover(message, sd.signature) ? valid++ : invalid++;
             seen[sd.index] = true;
         }
 
@@ -93,5 +93,9 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
         for (uint256 i = 1; i < length; i++) {
             require(owners[i] > owners[i - 1], OwnersUnsortedOrHasDuplicates());
         }
+    }
+
+    function _ecdsaRecover(bytes32 message, bytes memory signature) internal view returns (address) {
+        return ECDSA.recover(ECDSA.toEthSignedMessageHash(message), signature);
     }
 }

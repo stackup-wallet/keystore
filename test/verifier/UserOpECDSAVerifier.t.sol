@@ -19,7 +19,7 @@ contract UserOpECDSAVerifierTest is Test {
     function testFuzz_validateData(bool withUserOp) public {
         (address signer, uint256 signerPK) = makeAddrAndKey("signer");
         bytes32 message = keccak256("Signed by signer");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, message);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, ECDSA.toEthSignedMessageHash(message));
 
         bytes memory data = abi.encodePacked(r, s, v);
         if (withUserOp) {
@@ -35,7 +35,7 @@ contract UserOpECDSAVerifierTest is Test {
     function testFuzz_validateDataValidationFailed(bool withUserOp, address config) public {
         (, uint256 signerPK) = makeAddrAndKey("signer");
         bytes32 message = keccak256("Signed by signer");
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, message);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPK, ECDSA.toEthSignedMessageHash(message));
 
         bytes memory data = abi.encodePacked(r, s, v);
         if (withUserOp) {
