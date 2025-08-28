@@ -22,9 +22,9 @@ contract UserOpMultiSigVerifier is IVerifier, OnlyKeystore {
     }
 
     struct SignatureCheck {
+        bytes32 message;
         uint8 valid;
         uint8 invalid;
-        bytes32 message;
     }
 
     constructor(address aKeystore) OnlyKeystore(aKeystore) {}
