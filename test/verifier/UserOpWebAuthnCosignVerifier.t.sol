@@ -7,6 +7,7 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "account-abstraction
 import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOperation.sol";
 import {Test} from "forge-std/Test.sol";
 import {Base64} from "solady/utils/Base64.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {P256} from "solady/utils/P256.sol";
 import {WebAuthn} from "solady/utils/WebAuthn.sol";
@@ -116,7 +117,8 @@ contract UserOpWebAuthnCosignVerifierTest is Test {
         pure
         returns (bytes memory signature)
     {
-        (uint8 cosignerV, bytes32 cosignerR, bytes32 cosignerS) = vm.sign(cosignerPrivateKey, message);
+        (uint8 cosignerV, bytes32 cosignerR, bytes32 cosignerS) =
+            vm.sign(cosignerPrivateKey, ECDSA.toEthSignedMessageHash(message));
 
         string memory clientDataJSON =
             clientDataJSONPre.concat(Base64.encode(abi.encode(message), true, true)).concat(clientDataJSONPost);

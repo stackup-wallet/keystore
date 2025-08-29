@@ -63,7 +63,7 @@ contract UserOpWebAuthnCosignVerifier is IVerifier, OnlyKeystore {
 
         // Note: always run verification for both signatures in order to calculate accurate gas
         // estimates during simulation with dummy signers.
-        bool cosignValid = cosigner == ECDSA.recover(message, ecdsaSignature);
+        bool cosignValid = cosigner == ECDSA.recover(ECDSA.toEthSignedMessageHash(message), ecdsaSignature);
         bool webauthnValid = WebAuthn.verify(abi.encode(message), true, auth, x, y);
         return (cosignValid && webauthnValid) ? SIG_VALIDATION_SUCCESS : SIG_VALIDATION_FAILED;
     }

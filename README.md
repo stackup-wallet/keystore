@@ -12,10 +12,10 @@ All contracts are deployed deterministically with the following addresses.
 | ---------------------------- | -------------------------------------------- |
 | Keystore                     | `0x69C9F626b5Bd934C0F9806346682eD407FB978d3` |
 | KeystoreAccountFactory       | `0x625cF8EDec3f68d48D3aA385F356524B04760BE8` |
-| UserOpECDSAVerifier          | `0x294CD71960eed5AEa11DbbFa5D3c8eA4A1c1CE0F` |
-| UserOpMultiSigVerifier       | `0x1dBadE1E34706f83598ae9acFC63B7F4f928146E` |
+| UserOpECDSAVerifier          | `0x52949503fF5c34caEa4FC98F0723ebD0c300f232` |
+| UserOpMultiSigVerifier       | `0x0A3BC9523755f2B4e95458E1d8ABa8441cB61927` |
 | UserOpWebAuthnVerifier       | `0xE19620169A26aEbC4Fe229A073639da6b009bF1a` |
-| UserOpWebAuthnCosignVerifier | `0x7CD0D83C0c33AAC9cef88c75F3EDec80F4175252` |
+| UserOpWebAuthnCosignVerifier | `0x939C10DCdA11A73eCCc563340aBE3d257859dC6d` |
 
 ## Usage
 
